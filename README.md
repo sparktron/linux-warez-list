@@ -1,8 +1,8 @@
 # Linux Warez List
 
-> Comprehensive inventory of all software, tools, and configurations for Dylan Sparks' Ubuntu 22.04 LTS development machine.
+> Comprehensive inventory of software, tools, and configurations for an Ubuntu 22.04 LTS development machine.
 
-Complete breakdown of every dev tool, CLI utility, desktop application, extension, and font installed on a high-performance Ubuntu dev box (Intel i9-14900HX, 31GB RAM).
+Complete breakdown of every dev tool, CLI utility, desktop application, extension, and font for an Ubuntu 22.04 LTS dev environment.
 
 ## Contents
 
@@ -157,9 +157,7 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 
 ## System Info
 
-- **OS:** Ubuntu 22.04.5 LTS (Jammy Jellyfish)
-- **CPU:** Intel Core i9-14900HX (24 cores, 5.8 GHz boost)
-- **RAM:** 31 GB DDR5
+- **OS:** Ubuntu 22.04 LTS (Jammy Jellyfish)
 - **Primary Editor:** Cursor
 - **Shell:** Bash + Starship prompt
 - **Deployment:** Local / self-hosted only
