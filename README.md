@@ -137,6 +137,7 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 |---------|--------|
 | fonts-liberation | apt |
 | fonts-dejavu | apt |
+| FiraCode Nerd Font | script |
 
 ### Snap Applications
 | Package | Method |
@@ -187,7 +188,7 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 3. Add to `~/.bashrc` after installing Starship: `eval "$(starship init bash)"`
 4. Add to `~/.bashrc` after installing direnv: `eval "$(direnv hook bash)"`
 5. Download [Cursor](https://www.cursor.com/) (not in apt)
-6. Download [Nerd Fonts](https://www.nerdfonts.com/) for full Starship glyph support
+6. Set your terminal font to **FiraCode Nerd Font** after installing it (installer handles the download)
 7. Configure `~/.config/starship.toml` to taste
 
 ## Updating Tools

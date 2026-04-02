@@ -628,6 +628,26 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    b.pkg(
+        "FiraCode Nerd Font",
+        "FiraCode with Nerd Fonts glyph patches applied — adds ~3,600 icons (file type icons, \
+         git branch symbols, powerline arrows, devicons, Font Awesome, etc.) on top of \
+         FiraCode's programming ligatures. Required for full Starship prompt glyph support \
+         and any terminal theme that uses Powerline or devicon symbols. Downloads the latest \
+         release zip from GitHub, installs to ~/.local/share/fonts/, and refreshes the \
+         font cache with fc-cache.",
+        InstallCmd::Script(
+            "curl -fLo /tmp/FiraCode.zip \
+             https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip \
+             && mkdir -p ~/.local/share/fonts/FiraCodeNerdFont \
+             && unzip -o /tmp/FiraCode.zip -d ~/.local/share/fonts/FiraCodeNerdFont \
+             && fc-cache -fv \
+             && rm /tmp/FiraCode.zip",
+        ),
+        false,
+        false,
+    );
+
     // ── Snap Applications ─────────────────────────────────────────────────────
     b.cat("  Snap Applications  (snapd required)");
 
