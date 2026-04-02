@@ -8,7 +8,7 @@ Complete breakdown of every dev tool, CLI utility, desktop application, extensio
 
 | Name | Description |
 |------|-------------|
-| `installer-tui/target/release/installer-tui` | Interactive TUI installer binary (build first — see below) |
+| `installer` | Interactive TUI installer — run this (pre-built, Linux x86-64) |
 | `install-all.sh` | Headless script that installs everything automatically |
 | `LINUX_WAREZ_LIST.md` | Full software inventory with descriptions and install commands |
 | `gather-software-inventory.sh` | Dumps a JSON snapshot of installed packages for backup/diffing |
@@ -20,11 +20,15 @@ Complete breakdown of every dev tool, CLI utility, desktop application, extensio
 A Rust TUI that lets you browse all 40 packages by category, read descriptions, and check off exactly what you want before anything touches your system.
 
 ```bash
-# Build (requires Rust — install via https://rustup.rs)
+# Run the pre-built binary (sudo needed for apt/snap/docker packages)
+sudo ./installer
+```
+
+Or build from source:
+
+```bash
 cd installer-tui
 cargo build --release
-
-# Run (sudo needed for apt/snap/docker packages)
 sudo ./target/release/installer-tui
 ```
 
