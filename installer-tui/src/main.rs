@@ -634,15 +634,21 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          git branch symbols, powerline arrows, devicons, Font Awesome, etc.) on top of \
          FiraCode's programming ligatures. Required for full Starship prompt glyph support \
          and any terminal theme that uses Powerline or devicon symbols. Downloads the latest \
-         release zip from GitHub, installs to ~/.local/share/fonts/, and refreshes the \
-         font cache with fc-cache.",
+         release zip from GitHub, installs to ~/.local/share/fonts/, refreshes fc-cache, \
+         then sets the system monospace font and GNOME Terminal default profile font to \
+         FiraCode Nerd Font Mono 11 via gsettings.",
         InstallCmd::Script(
-            "curl -fLo /tmp/FiraCode.zip \
+            "apt-get install -y unzip \
+             && curl -fLo /tmp/FiraCode.zip \
              https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip \
              && mkdir -p ~/.local/share/fonts/FiraCodeNerdFont \
              && unzip -o /tmp/FiraCode.zip -d ~/.local/share/fonts/FiraCodeNerdFont \
              && fc-cache -fv \
-             && rm /tmp/FiraCode.zip",
+             && rm /tmp/FiraCode.zip \
+             && gsettings set org.gnome.desktop.interface monospace-font-name 'FiraCode Nerd Font Mono 11' \
+             && PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \"'\") \
+             && gsettings set \"org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/\" use-system-font false \
+             && gsettings set \"org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/\" font 'FiraCode Nerd Font Mono 11'",
         ),
         false,
         false,
