@@ -6,49 +6,171 @@ Complete breakdown of every dev tool, CLI utility, desktop application, extensio
 
 ## Contents
 
-- **LINUX_WAREZ_LIST.md** — Full software inventory with installation instructions and usage
-- **install-all.sh** — Automated installation script to set up entire environment from scratch
+| File | Description |
+|------|-------------|
+| `installer-tui/` | Interactive terminal UI installer — pick and choose what to install |
+| `install-all.sh` | Headless script that installs everything automatically |
+| `LINUX_WAREZ_LIST.md` | Full software inventory with descriptions and install commands |
+| `gather-software-inventory.sh` | Dumps a JSON snapshot of installed packages for backup/diffing |
 
-## Quick Start
+---
 
-### Review the inventory
+## Interactive Installer (recommended)
+
+A Rust TUI that lets you browse all 40 packages by category, read descriptions, and check off exactly what you want before anything touches your system.
+
 ```bash
-cat LINUX_WAREZ_LIST.md
+# Build (requires Rust — install via https://rustup.rs)
+cd installer-tui
+cargo build --release
+
+# Run (sudo needed for apt/snap/docker packages)
+sudo ./target/release/installer-tui
 ```
 
-### Install everything automatically
+### Controls
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Navigate the list |
+| `Space` | Toggle a package on/off |
+| `A` | Select all |
+| `N` | Deselect all |
+| `PgUp` / `PgDn` | Jump 10 items |
+| `Enter` | Review selected packages |
+| `B` / `Esc` | Go back to the list |
+| `Q` | Quit |
+
+### What it looks like
+
+**Package selection screen** — browse all 40 packages by category, read descriptions, and toggle what you want:
+
+![Package selection screen](docs/screenshot-select.png)
+
+**Review screen** — see everything you've selected grouped by install method before anything touches your system:
+
+![Review installation screen](docs/screenshot-confirm.png)
+
+Package rows are color-coded by install method:
+- **Cyan** `●` — `apt` package
+- **Green** `●` — shell script (curl installer)
+- **Magenta** `●` — `cargo install`
+- **Blue** `●` — `pip3 install`
+- **Yellow** `●` — `snap install`
+
+---
+
+## Headless Install (install everything)
+
 ```bash
 sudo bash install-all.sh
 ```
 
-This will install:
-- **Development languages:** Python 3.10, Node.js, Rust, GCC, Clang
-- **CLI tools:** ripgrep, fd, direnv, jq, CMake, Valgrind, git, gh
-- **Package managers:** pip, npm, cargo
-- **Testing:** pytest, pytest-mock
-- **Editors:** Cursor, VS Code
-- **Container tools:** Docker, Docker Compose
-- **Desktop apps:** Discord, Slack, Spotify, Notion, VeraCrypt, SimpleScreenRecorder
-- **Fonts:** Liberation, DejaVu, + setup for Nerd Fonts
-- **Shell:** Bash with Starship prompt, direnv
+Installs the full stack unattended. Useful for provisioning a fresh machine where you want everything.
+
+---
+
+## Packages (40 total)
+
+### System Tools
+| Package | Method |
+|---------|--------|
+| build-essential | apt |
+| git | apt |
+| gh (GitHub CLI) | script |
+
+### Languages & Runtimes
+| Package | Method |
+|---------|--------|
+| Python 3.10 + pip + venv | apt |
+| Node.js 20 + npm | script |
+| Rust (via rustup) | script |
+| GCC + G++ + GDB | apt |
+| Clang + LLVM | apt |
+
+### CLI Tools
+| Package | Method |
+|---------|--------|
+| ripgrep (rg) | apt |
+| fd | script |
+| direnv | apt |
+| jq | apt |
+| SQLite3 | apt |
+| make | apt |
+| CMake | apt |
+| Valgrind | apt |
+| bat | apt |
+| Watchman | apt |
+| FFmpeg | apt |
+| ImageMagick | apt |
+
+### Containers
+| Package | Method |
+|---------|--------|
+| Docker + Docker Compose | script |
+
+### Terminal & Shell
+| Package | Method |
+|---------|--------|
+| bash-completion | apt |
+| GNOME Terminal | apt |
+
+### Rust Tools
+| Package | Method |
+|---------|--------|
+| Starship (shell prompt) | cargo |
+| Just (task runner) | cargo |
+
+### Python Packages
+| Package | Method |
+|---------|--------|
+| pytest + pytest-mock + pytest-cov | pip |
+| SQLAlchemy | pip |
+| Pydantic + pydantic-settings | pip |
+| black | pip |
+| flake8 | pip |
+| mypy | pip |
+| requests | pip |
+
+### Fonts
+| Package | Method |
+|---------|--------|
+| fonts-liberation | apt |
+| fonts-dejavu | apt |
+
+### Snap Applications
+| Package | Method |
+|---------|--------|
+| Discord | snap |
+| Slack | snap |
+| Spotify | snap |
+| Notion | snap |
+| NordPass | snap |
+
+### Desktop Applications
+| Package | Method |
+|---------|--------|
+| SimpleScreenRecorder | apt |
+| VeraCrypt | apt |
+
+---
 
 ## System Info
 
 - **OS:** Ubuntu 22.04.5 LTS (Jammy Jellyfish)
-- **CPU:** Intel Core i9-14900HX (24 cores)
-- **RAM:** 31 GB
+- **CPU:** Intel Core i9-14900HX (24 cores, 5.8 GHz boost)
+- **RAM:** 31 GB DDR5
 - **Primary Editor:** Cursor
 - **Shell:** Bash + Starship prompt
-- **Deployment:** Local/self-hosted only
+- **Deployment:** Local / self-hosted only
 
 ## Tech Stack
 
 - Python 3.10 (primary)
 - C/C++ (embedded, RF security)
-- JavaScript/Node.js
+- JavaScript / Node.js
 - Rust (systems tools)
-- Vanilla HTML/CSS/JS (static sites)
-- Swift 6/SwiftUI (iOS)
+- Swift 6 / SwiftUI (iOS)
 
 ## Workflow
 
@@ -59,85 +181,38 @@ This will install:
 - **CI/CD:** GitHub Actions
 - **Build:** Make, CMake, Just
 
-## Installation Notes
+---
 
-### First Time Setup
-1. Clone this repo
-2. Review `LINUX_WAREZ_LIST.md` to customize for your needs
-3. Run `sudo bash install-all.sh`
-4. Log out and back in (for Docker group permissions)
-5. Download Cursor from https://www.cursor.com/
-6. Download Nerd Fonts from https://www.nerdfonts.com/
+## Post-Install Steps
 
-### Updates
-To update individual tools:
+1. Log out and back in after installing Docker (group permissions)
+2. Run `gh auth login` to authenticate the GitHub CLI
+3. Add to `~/.bashrc` after installing Starship: `eval "$(starship init bash)"`
+4. Add to `~/.bashrc` after installing direnv: `eval "$(direnv hook bash)"`
+5. Download [Cursor](https://www.cursor.com/) (not in apt)
+6. Download [Nerd Fonts](https://www.nerdfonts.com/) for full Starship glyph support
+7. Configure `~/.config/starship.toml` to taste
+
+## Updating Tools
+
 ```bash
+# apt packages
 sudo apt update && sudo apt upgrade
+
+# Python packages
 pip install --upgrade <package>
+
+# Rust tools
 cargo install --force <tool>
+
+# npm globals
 npm install -g <package>
 ```
 
-## Post-Install Configuration
-
-### Starship Prompt
-Edit `~/.config/starship.toml` to customize prompt appearance.
-
-### direnv Setup
-Create `.envrc` files in project directories:
-```bash
-echo 'export PYTHONPATH=/path/to/src' > .envrc
-direnv allow
-```
-
-### Docker
-Add your user to docker group:
-```bash
-sudo usermod -aG docker $USER
-# Log out and back in
-```
-
-### Git Configuration
-```bash
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
-```
-
-## Cursor Extensions
-
-Key extensions installed via Cursor:
-- Python
-- Pylance
-- Rust-analyzer
-- C/C++
-- CMake
-- GitLens
-- Prettier
-- Thunder Client
-- REST Client
-- Error Lens
-- Better Comments
-
-## Hardware Specifications
-
-- **CPU:** Intel Core i9-14900HX (24 cores, 5.8 GHz boost)
-- **RAM:** 31 GB DDR5
-- **Storage:** High-speed NVMe SSD
-- **Perfect for:** Heavy computation, parallel testing, large compilations
-
-## Notes
-
-- **No cloud:** All services are local or self-hosted
-- **Correctness first:** Prioritizes bug-free code over premature optimization
-- **Small diffs:** Prefers minimal, reviewable changes
-- **High agency:** Scripts and tools designed to work autonomously
+---
 
 ## License
 
 Public reference — customize as needed for your environment.
 
----
-
-**Last Updated:** 2026-03-30
-
-Questions or improvements? Update LINUX_WAREZ_LIST.md and push!
+**Last Updated:** 2026-04-02

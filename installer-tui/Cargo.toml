@@ -1,0 +1,9 @@
+[package]
+name = "installer-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Interactive TUI installer for Ubuntu dev environment"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"

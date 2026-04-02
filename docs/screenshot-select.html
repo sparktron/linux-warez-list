@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>installer-tui — select</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; }
+.t {
+    display: inline-block;
+    background: #0d0d0d;
+    font-family: 'Consolas','Courier New',Courier,monospace;
+    font-size: 13.5px;
+    line-height: 1.4;
+    padding: 10px 14px;
+    color: #c0c0c0;
+    border-radius: 6px;
+}
+.row { display:block; white-space:pre; }
+.hl  { background:#16345F; }
+
+.c   { color:#00d7d7; }
+.cb  { color:#00d7d7; font-weight:bold; }
+.yb  { color:#ffff00; font-weight:bold; }
+.g   { color:#5fff5f; }
+.gb  { color:#5fff5f; font-weight:bold; }
+.lr  { color:#ff6060; }
+.lrb { color:#ff6060; font-weight:bold; }
+.lm  { color:#ff87ff; }
+.lb  { color:#87d7ff; }
+.lyl { color:#ffd75f; }
+.lg  { color:#87ff87; }
+.dim { color:#5a5a80; }
+.wh  { color:#ffffff; }
+.wb  { color:#ffffff; font-weight:bold; }
+.dg  { color:#585858; }
+.inv { background:#00d7d7; color:#000000; font-weight:bold; }
+</style>
+</head>
+<body><div class="t">
+<div class="row"><span class="c">╭</span><span class="inv"> ubuntu-installer </span><span class="c">────────────────────────────────────────────────────────────────────────────────</span><span class="c">╮</span></div>
+<div class="row"><span class="c">│</span><span class="cb">  Ubuntu Dev Environment Installer</span>                                                 <span class="gb">4/40 selected  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>  <span class="yb">Space</span><span class="dim"> toggle  ·  </span><span class="yb">A</span><span class="dim"> all  ·  </span><span class="yb">N</span><span class="dim"> none  ·  </span><span class="gb">Enter</span><span class="dim"> review  ·  </span><span class="lr">Q</span><span class="dim"> quit</span>                        <span class="c">│</span></div>
+<div class="row"><span class="c">╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</span></div>
+<div class="row"><span class="c">╭</span><span class="cb"> Packages (40 total) </span><span class="c">─────────────────────────────────────</span><span class="c">╮</span><span class="c">╭</span><span class="cb"> ripgrep  (rg) </span><span class="c">───────────────────────</span><span class="c">╮</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── System Tools ───────────────────────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="g">x</span><span class="dim">] </span><span class="wb">build-essential                          </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> Blazing-fast recursive text search,  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="g">x</span><span class="dim">] </span><span class="wb">git                                      </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> much faster than grep or ag.         </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lg">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">gh  (GitHub CLI)                         </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> Automatically respects .gitignore    </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Languages &amp; Runtimes ───────────────────────────────</span><span class="c">│</span><span class="c">│</span><span class="wh"> files, handles binary files          </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="g">x</span><span class="dim">] </span><span class="wb">Python 3.10 + pip + venv                 </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> intelligently, and supports PCRE2    </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lg">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Node.js 20 + npm                         </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> regex. An essential everyday tool    </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lg">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Rust  (via rustup)                       </span>         <span class="c">│</span><span class="c">│</span><span class="wh"> for searching large codebases.       </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">GCC + G++ + GDB                          </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="wh"> Example: `rg &#x27;TODO&#x27; --type rust`     </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Clang + LLVM                             </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── CLI Tools ──────────────────────────────────────────</span><span class="c">│</span><span class="c">│</span><span class="dim">──────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row hl"><span class="c">│</span><span class="cb">▶ </span><span class="wh">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wb">ripgrep  (rg)                            </span><span class="lrb"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lg">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">fd                                       </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="dim">  Type  </span><span class="cb">● apt                         </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">direnv                                   </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="dim">  Root  </span><span class="lr">yes  (sudo required)          </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">jq                                       </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">SQLite3                                  </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="dim">──────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">make                                     </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">CMake                                    </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span><span class="dim">  $ </span><span class="gb">apt install -y ripgrep</span>            <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Valgrind                                 </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">bat                                      </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Watchman                                 </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">FFmpeg                                   </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">ImageMagick                              </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Containers ─────────────────────────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lg">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Docker + Docker Compose                  </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Terminal &amp; Shell ───────────────────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="c">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">bash-completion                          </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Rust Tools  (cargo required) ───────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lm">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Starship  (shell prompt)                 </span>         <span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lm">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Just  (task runner)                      </span>         <span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Python Packages  (pip req.) ────────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lb">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">pytest + pytest-mock + cov               </span>         <span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lb">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">SQLAlchemy                               </span>         <span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  ─── Snap Applications ──────────────────────────────────</span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lyl">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Discord  (snap)                          </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">  </span><span class="lyl">●</span> <span class="dim">[</span><span class="dg"> </span><span class="dim">] </span><span class="wh">Slack  (snap)                            </span><span class="lr"> [root]  </span><span class="c">│</span><span class="c">│</span>                                      <span class="c">│</span></div>
+<div class="row"><span class="c">╰</span><span class="dim"> ● apt  ● sh  ● cargo  ● pip  ● snap </span><span class="c">─────────────────────</span><span class="c">╯</span><span class="c">╰</span><span class="c">──────────────────────────────────────</span><span class="c">╯</span></div>
+<div class="row"><span class="c">╭</span><span class="gb"> [███░░░░░░░░░░░░░░░░░] 4/40 packages </span><span class="c">────────────────────────────────────────────────────────────</span><span class="c">╮</span></div>
+<div class="row"><span class="c">│</span>  <span class="yb">↑↓</span><span class="dim"> nav  ·  </span><span class="yb">Spc</span><span class="dim"> toggle  ·  </span><span class="yb">A</span><span class="dim"> all  ·  </span><span class="yb">N</span><span class="dim"> none  ·  </span><span class="yb">PgUp/Dn</span><span class="dim"> jump  ·  </span><span class="gb">Enter</span><span class="dim"> install  ·  </span><span class="lr">Q</span><span class="dim"> quit</span>   <span class="c">│</span></div>
+<div class="row"><span class="c">╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</span></div>
+</div></body></html>

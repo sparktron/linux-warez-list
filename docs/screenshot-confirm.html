@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>installer-tui — confirm</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; }
+.t {
+    display: inline-block;
+    background: #0d0d0d;
+    font-family: 'Consolas','Courier New',Courier,monospace;
+    font-size: 13.5px;
+    line-height: 1.4;
+    padding: 10px 14px;
+    color: #c0c0c0;
+    border-radius: 6px;
+}
+.row { display:block; white-space:pre; }
+.hl  { background:#16345F; }
+
+.c   { color:#00d7d7; }
+.cb  { color:#00d7d7; font-weight:bold; }
+.yb  { color:#ffff00; font-weight:bold; }
+.g   { color:#5fff5f; }
+.gb  { color:#5fff5f; font-weight:bold; }
+.lr  { color:#ff6060; }
+.lrb { color:#ff6060; font-weight:bold; }
+.lm  { color:#ff87ff; }
+.lb  { color:#87d7ff; }
+.lyl { color:#ffd75f; }
+.lg  { color:#87ff87; }
+.dim { color:#5a5a80; }
+.wh  { color:#ffffff; }
+.wb  { color:#ffffff; font-weight:bold; }
+.dg  { color:#585858; }
+.inv { background:#00d7d7; color:#000000; font-weight:bold; }
+</style>
+</head>
+<body><div class="t">
+<div class="row"><span class="c">╭</span><span class="cb"> Review Installation  ·  12/40 packages </span><span class="c">──────────────────────────────────────────────────────────</span><span class="c">╮</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="cb">  ─── APT </span><span class="dim">────────────────────────────────────────────────────────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="c">● </span><span class="wb">build-essential</span>                                                                      <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">apt install -y ...</span>                                                                       <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="c">● </span><span class="wb">git</span>                                                                                  <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">apt install -y ...</span>                                                                       <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="c">● </span><span class="wb">Python 3.10 + pip</span>                                                                    <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">apt install -y ...</span>                                                                       <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="c">● </span><span class="wb">ripgrep  (rg)</span>                                                                        <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">apt install -y ...</span>                                                                       <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="lg">  ─── SH </span><span class="dim">─────────────────────────────────────────────────────────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lg">● </span><span class="wb">fd</span>                                                                                   <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">curl ... | sh</span>                                                                            <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lg">● </span><span class="wb">Rust  (via rustup)</span>                                                                   <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">curl ... | sh</span>                                                                            <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lg">● </span><span class="wb">Docker + Docker Compose</span>                                                              <span class="lr">[root]  </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">curl ... | sh</span>                                                                            <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="lmb">  ─── CARGO </span><span class="dim">──────────────────────────────────────────────────────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lm">● </span><span class="wb">Starship</span>                                                                             <span class="lr">        </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">cargo install ...</span>                                                                        <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lm">● </span><span class="wb">Just</span>                                                                                 <span class="lr">        </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">cargo install ...</span>                                                                        <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="lb">  ─── PIP </span><span class="dim">────────────────────────────────────────────────────────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lb">● </span><span class="wb">pytest + mock + cov</span>                                                                  <span class="lr">        </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">pip3 install ...</span>                                                                         <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lb">● </span><span class="wb">SQLAlchemy</span>                                                                           <span class="lr">        </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">pip3 install ...</span>                                                                         <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>   <span class="lb">● </span><span class="wb">Pydantic</span>                                                                             <span class="lr">        </span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">       $ </span><span class="dim">pip3 install ...</span>                                                                         <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="dim">──────────────────────────────────────────────────────────────────────────────────────────────────</span><span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">│</span><span class="yb">  [!] </span><span class="yb">Packages marked </span><span class="lr">[root]</span><span class="yb"> require sudo.  Run with: </span><span class="wb">sudo installer-tui</span>                          <span class="c">│</span></div>
+<div class="row"><span class="c">│</span>                                                                                                  <span class="c">│</span></div>
+<div class="row"><span class="c">╰</span><span class="dim"> Enter: install  ·  B/Esc: back  ·  ↑↓/j k: scroll  ·  Q: quit </span><span class="c">───────────────────────────────────</span><span class="c">╯</span></div>
+</div></body></html>
