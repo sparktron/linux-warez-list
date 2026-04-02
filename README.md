@@ -8,7 +8,7 @@ Complete breakdown of every dev tool, CLI utility, desktop application, extensio
 
 | Name | Description |
 |------|-------------|
-| `installer-tui/` | Rust TUI installer — pick and choose what to install (see below) |
+| `installer-tui/target/release/installer-tui` | Interactive TUI installer binary (build first — see below) |
 | `install-all.sh` | Headless script that installs everything automatically |
 | `LINUX_WAREZ_LIST.md` | Full software inventory with descriptions and install commands |
 | `gather-software-inventory.sh` | Dumps a JSON snapshot of installed packages for backup/diffing |
