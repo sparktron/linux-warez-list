@@ -168,7 +168,6 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 - C/C++ (embedded, RF security)
 - JavaScript / Node.js
 - Rust (systems tools)
-- Swift 6 / SwiftUI (iOS)
 
 ## Workflow
 
