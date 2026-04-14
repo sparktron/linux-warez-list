@@ -36,55 +36,53 @@ def hbar(n):
 # None for dot_color_cls = category header
 
 PKGS = [
-    # name                           dot    sel    root   cursor
-    ("System Tools",                 None,  None,  None,  False),
-    ("build-essential",              "c",   True,  True,  False),
-    ("git",                          "c",   True,  True,  False),
-    ("gh  (GitHub CLI)",             "lg",  False, True,  False),
-    ("Languages & Runtimes",         None,  None,  None,  False),
-    ("Python 3.10 + pip + venv",     "c",   True,  True,  False),
-    ("Node.js 20 + npm",             "lg",  False, True,  False),
-    ("Rust  (via rustup)",           "lg",  False, False, False),
-    ("GCC + G++ + GDB",              "c",   False, True,  False),
-    ("Clang + LLVM",                 "c",   False, True,  False),
-    ("CLI Tools",                    None,  None,  None,  False),
-    ("ripgrep  (rg)",                "c",   False, True,  True),   # ← cursor
-    ("fd",                           "lg",  False, True,  False),
-    ("direnv",                       "c",   False, True,  False),
-    ("jq",                           "c",   False, True,  False),
-    ("SQLite3",                      "c",   False, True,  False),
-    ("make",                         "c",   False, True,  False),
-    ("CMake",                        "c",   False, True,  False),
-    ("Valgrind",                     "c",   False, True,  False),
-    ("bat",                          "c",   False, True,  False),
-    ("Watchman",                     "c",   False, True,  False),
-    ("FFmpeg",                       "c",   False, True,  False),
-    ("ImageMagick",                  "c",   False, True,  False),
-    ("Containers",                   None,  None,  None,  False),
-    ("Docker + Docker Compose",      "lg",  False, True,  False),
-    ("Terminal & Shell",             None,  None,  None,  False),
-    ("bash-completion",              "c",   False, True,  False),
-    ("Rust Tools  (cargo required)", None,  None,  None,  False),
-    ("Starship  (shell prompt)",     "lm",  False, False, False),
-    ("Just  (task runner)",          "lm",  False, False, False),
-    ("Python Packages  (pip req.)",  None,  None,  None,  False),
-    ("pytest + pytest-mock + cov",   "lb",  False, False, False),
-    ("SQLAlchemy",                   "lb",  False, False, False),
-    ("Snap Applications",            None,  None,  None,  False),
-    ("Discord  (snap)",              "lyl", False, True,  False),
-    ("Slack  (snap)",                "lyl", False, True,  False),
+    # name                              dot    sel    root   cursor
+    ("System Tools",                    None,  None,  None,  False),
+    ("build-essential",                 "c",   True,  True,  False),
+    ("git",                             "c",   True,  True,  False),
+    ("gh  (GitHub CLI)",                "lg",  False, True,  False),
+    ("linux-lowlatency  (kernel)",      "c",   False, True,  False),
+    ("Languages & Runtimes",            None,  None,  None,  False),
+    ("Python 3.10  +  pip  +  venv",    "c",   True,  True,  False),
+    ("Node.js 20  +  npm",              "lg",  False, True,  False),
+    ("Rust  (via rustup)",              "lg",  False, False, False),
+    ("CLI Tools",                       None,  None,  None,  False),
+    ("ripgrep  (rg)",                   "c",   True,  True,  False),
+    ("bat",                             "c",   False, True,  False),
+    ("fzf",                             "c",   False, True,  True),   # ← cursor
+    ("hstr  (bash history)",            "c",   False, True,  False),
+    ("rsync",                           "c",   False, True,  False),
+    ("yt-dlp",                          "c",   False, True,  False),
+    ("bottom  (btm)",                   "lyl", False, True,  False),
+    ("Containers",                      None,  None,  None,  False),
+    ("Docker  +  Docker Compose",       "lg",  False, True,  False),
+    ("Security & Networking",           None,  None,  None,  False),
+    ("nmap",                            "c",   False, True,  False),
+    ("netcat  (nc)",                    "c",   False, True,  False),
+    ("aircrack-ng",                     "c",   False, True,  False),
+    ("wifite  +  hcxtools",             "c",   False, True,  False),
+    ("Tailscale",                       "lyl", False, True,  False),
+    ("NetBird",                         "lyl", False, True,  False),
+    ("NordVPN",                         "lyl", False, True,  False),
+    ("Desktop Applications",            None,  None,  None,  False),
+    ("Google Chrome",                   "lg",  False, True,  False),
+    ("Signal",                          "lg",  False, True,  False),
+    ("Claude  (desktop)",               "lg",  False, True,  False),
+    ("GNOME Tweaks",                    "c",   False, True,  False),
+    ("Solaar",                          "c",   False, True,  False),
 ]
 
-# Ripgrep description (wrapped to RI-2 = 36 chars per line)
-RIPDESC = [
-    "Blazing-fast recursive text search,",
-    "much faster than grep or ag.",
-    "Automatically respects .gitignore",
-    "files, handles binary files",
-    "intelligently, and supports PCRE2",
-    "regex. An essential everyday tool",
-    "for searching large codebases.",
-    "Example: `rg 'TODO' --type rust`",
+# fzf description (cursor package, wrapped to RI-2 = 36 chars per line)
+FZFDESC = [
+    "General-purpose interactive fuzzy",
+    "finder. Pipe any list for instant",
+    "filtering — shell history search",
+    "(Ctrl+R), file picker, git branch",
+    "selector. Shell keybindings",
+    "installed automatically.",
+    "",
+    "$ git log --oneline | fzf",
+    "$ cd $(fd -t d | fzf)",
 ]
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
@@ -136,7 +134,6 @@ def left_row(pkg):
     name, dot_cls, selected, requires_root, is_cursor = pkg
 
     if dot_cls is None:
-        # Category header
         head = f"  {hbar(3)} {name} "
         fill = hbar(max(0, LI - len(head)))
         return row(("│","c"), (head + fill, "yb"), ("│","c"))
@@ -191,13 +188,13 @@ def right_cmd(cmd):
 # Build right panel lines
 RIGHT_ROWS = (
     [right_empty()]
-    + [right_text(l) for l in RIPDESC]
+    + [right_text(l) for l in FZFDESC]
     + [right_empty(), right_sep(), right_empty()]
     + [right_field("Type","● apt", "cb")]
     + [right_field("Root","yes  (sudo required)", "lr")]
     + [right_empty(), right_sep(), right_empty()]
-    + [right_cmd("apt install -y ripgrep")]
-    + [right_empty()] * 20  # padding
+    + [right_cmd("apt install -y fzf")]
+    + [right_empty()] * 20
 )
 
 # ── Build selection screen ─────────────────────────────────────────────────────
@@ -210,13 +207,12 @@ def build_select():
     lines.append(row(("╭","c"), (label,"inv"), (hbar(W-2-len(label)),"c"), ("╮","c")))
 
     lh = "  Ubuntu Dev Environment Installer"
-    rh = "4/40 selected  "
+    rh = "5/65 selected  "
     lines.append(row(
         ("│","c"), (lh,"cb"),
         (" "*(W-2-len(lh)-len(rh)), ""),
         (rh,"gb"), ("│","c")
     ))
-    kraw = "  "
     lines.append(row(
         ("│","c"), ("  ",""),
         ("Space","yb"), (" toggle  ·  ","dim"),
@@ -229,21 +225,16 @@ def build_select():
     lines.append(row(("╰"+hbar(W-2)+"╯","c")))
 
     # Panel top borders
-    pt = " Packages (40 total) "
-    dt = " ripgrep  (rg) "
+    pt = " Packages (65 total) "
+    dt = " fzf "
     lines.append(row(
         ("╭","c"),(pt,"cb"),(hbar(LW-2-len(pt)),"c"),("╮","c"),
         ("╭","c"),(dt,"cb"),(hbar(RW-2-len(dt)),"c"),("╮","c"),
     ))
 
-    # Content rows — merge left + right
+    # Content rows
     ri = 0
     for pkg in PKGS:
-        lr = left_row(pkg)
-        rr = RIGHT_ROWS[ri] if ri < len(RIGHT_ROWS) else right_empty()
-        is_cursor = pkg[4]
-        # Combine left row spans (already a full HTML div) with right row spans
-        # Re-build manually to get combined hl
         name, dot_cls, selected, requires_root, cursor = pkg
         if dot_cls is None:
             head = f"  {hbar(3)} {name} "
@@ -265,6 +256,7 @@ def build_select():
                 ("[",brk_col), (check,check_col), ("] ",brk_col),
                 (name_d,name_col), (suffix,suf_col), ("│","c"),
             ]
+        rr = RIGHT_ROWS[ri] if ri < len(RIGHT_ROWS) else right_empty()
         all_spans = l_spans + rr
         content = "".join(sp(t,c) for t,c in all_spans)
         cls = "row hl" if cursor else "row"
@@ -279,8 +271,8 @@ def build_select():
     ))
 
     # Controls
-    bar = "[███░░░░░░░░░░░░░░░░░]"
-    ct  = f" {bar} 4/40 packages "
+    bar = "[████░░░░░░░░░░░░░░░░]"
+    ct  = f" {bar} 5/65 packages "
     lines.append(row(("╭","c"),(ct,"gb"),(hbar(W-2-len(ct)),"c"),("╮","c")))
     lines.append(row(
         ("│","c"), ("  ",""),
@@ -300,39 +292,40 @@ def build_select():
 # ── Build confirm screen ───────────────────────────────────────────────────────
 
 CONFIRM_PKGS = [
-    # selected packages to display
-    ("build-essential",    "c",   "apt"),
-    ("git",                "c",   "apt"),
-    ("Python 3.10 + pip",  "c",   "apt"),
-    ("ripgrep  (rg)",      "c",   "apt"),
-    ("fd",                 "lg",  "sh"),
-    ("Rust  (via rustup)", "lg",  "sh"),
-    ("Docker + Docker Compose","lg","sh"),
-    ("Starship",           "lm",  "cargo"),
-    ("Just",               "lm",  "cargo"),
-    ("pytest + mock + cov","lb",  "pip"),
-    ("SQLAlchemy",         "lb",  "pip"),
-    ("Pydantic",           "lb",  "pip"),
+    ("build-essential",        "c",   "apt"),
+    ("git",                    "c",   "apt"),
+    ("Python 3.10 + pip",      "c",   "apt"),
+    ("ripgrep  (rg)",          "c",   "apt"),
+    ("nmap",                   "c",   "apt"),
+    ("gh  (GitHub CLI)",       "lg",  "sh"),
+    ("Docker + Compose",       "lg",  "sh"),
+    ("Google Chrome",          "lg",  "sh"),
+    ("Signal",                 "lg",  "sh"),
+    ("Starship",               "lm",  "cargo"),
+    ("Just  (task runner)",    "lm",  "cargo"),
+    ("pytest + mock + cov",    "lb",  "pip"),
+    ("SQLAlchemy",             "lb",  "pip"),
+    ("Discord",                "lyl", "snap"),
+    ("Tailscale",              "lyl", "snap"),
+    ("NordVPN",                "lyl", "snap"),
 ]
 
 CMDS = {
-    "apt":   ("apt install -y ...", "c"),
-    "sh":    ("curl ... | sh",      "lg"),
-    "cargo": ("cargo install ...",  "lm"),
-    "pip":   ("pip3 install ...",   "lb"),
-    "snap":  ("snap install ...",   "lyl"),
+    "apt":   ("apt install -y ...",  "c"),
+    "sh":    ("curl ... | sh",       "lg"),
+    "cargo": ("cargo install ...",   "lm"),
+    "pip":   ("pip3 install ...",    "lb"),
+    "snap":  ("snap install ...",    "lyl"),
 }
 
 def build_confirm():
     lines = []
     IW = W - 2  # inner = 98
 
-    title = " Review Installation  ·  12/40 packages "
+    title = " Review Installation  ·  16/65 packages "
     lines.append(row(("╭","c"),(title,"cb"),(hbar(W-2-len(title)),"c"),("╮","c")))
-
     lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
-    # Group by type
     groups = {}
     order  = []
     for name, dot_cls, typ in CONFIRM_PKGS:
@@ -350,13 +343,12 @@ def build_confirm():
         lbl  = type_labels[typ]
         head = f"  {hbar(3)} {lbl} "
         fill = hbar(IW - len(head))
-        lines.append(row(("│","c"),(head,f"{col}b" if f"{col}b" in ["cb","lmb"] else col),(fill,"dim"),("│","c")))
+        lines.append(row(("│","c"),(head,col),(fill,"dim"),("│","c")))
         lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
         cmd_txt, _ = CMDS[typ]
         for pname, pdot in pkgs:
-            pline = f"   ● {pname}"
-            ppad  = " " * max(0, IW - len(pline) - 8)
+            ppad  = " " * max(0, IW - 5 - len(pname) - 8)
             root  = "[root]  " if typ in ("apt","sh","snap") else "        "
             lines.append(row(
                 ("│","c"),("   ",""),("● ",col),(pname,"wb"),(ppad,""),(root,"lr"),("│","c")
@@ -366,14 +358,16 @@ def build_confirm():
             lines.append(row(("│","c"),("       $ ","dim"),(cmd_txt,"dim"),(cpad,""),("│","c")))
             lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
-    # Warning
     lines.append(row(("│","c"),(hbar(IW),"dim"),("│","c")))
     lines.append(row(("│","c"),(" "*IW,""),("│","c")))
-    wline = "  [!] Packages marked [root] require sudo.  Run with: sudo installer-tui"
-    wpad  = " " * max(0, IW - len(wline))
-    lines.append(row(("│","c"),("  [!] ","yb"),
-        ("Packages marked ","yb"),("[root]","lr"),(" require sudo.  Run with: ","yb"),
-        ("sudo installer-tui","wb"),(wpad,""),("│","c")))
+    wline_txt = "Packages marked [root] require sudo.  Run with: "
+    wline_cmd = "sudo ./installer"
+    wpad_n = IW - 8 - len(wline_txt) - len(wline_cmd)
+    lines.append(row(
+        ("│","c"),("  [!] ","yb"),
+        (wline_txt,"yb"),
+        (wline_cmd,"wb"),
+        (" "*max(0,wpad_n),""),("│","c")))
     lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
     bot = " Enter: install  ·  B/Esc: back  ·  ↑↓/j k: scroll  ·  Q: quit "
@@ -397,8 +391,7 @@ def page(body, title=""):
 {body}
 </div></body></html>"""
 
-out = "/home/mythos/repos/linux-warez-list/docs"
-os.makedirs(out, exist_ok=True)
+out = os.path.dirname(os.path.abspath(__file__))
 
 select_html  = page(render(build_select()),  "installer-tui — select")
 confirm_html = page(render(build_confirm()), "installer-tui — confirm")
