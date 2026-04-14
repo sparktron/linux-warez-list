@@ -44,6 +44,14 @@
 - **Usage:** Service management, system initialization
 - **Install:** Included in base Ubuntu
 
+### linux-lowlatency (Kernel)
+- **What:** Ubuntu's low-latency kernel flavor with reduced scheduling latency
+- **Installed:** Optional
+- **Usage:** Real-time audio production, low-latency workloads, interactive desktop; uses 1000 Hz timer and voluntary preemption
+- **Install:** `sudo apt install linux-lowlatency`
+- **Note:** Reboot required after installation for new kernel to take effect
+- **Version Check:** `uname -r` (after reboot, should show `-lowlatency` suffix)
+
 ---
 
 ## Development Languages & Runtimes
@@ -183,6 +191,62 @@
 - **Version Check:** `bat --version`
 - **Usage Example:** `bat src/main.py`
 
+### fzf
+- **What:** General-purpose interactive fuzzy finder
+- **Installed:** Yes
+- **Usage:** Fuzzy-filter any list — most commonly used for shell history (Ctrl+R), file picker, and git branch selector; shell keybindings installed automatically
+- **Install:** `sudo apt install fzf`
+- **Version Check:** `fzf --version`
+- **Usage Example:** `git log --oneline | fzf` or `cd $(fd -t d | fzf)`
+
+### hstr
+- **What:** Improved bash history search with frequency/recency ranking
+- **Installed:** Yes
+- **Usage:** Search, favorite, and re-run past shell commands interactively
+- **Install:** `sudo apt install hstr`
+- **Version Check:** `hstr --version`
+- **Setup:** Add to `~/.bashrc`: `eval "$(hstr --show-configuration)"`
+
+### rsync
+- **What:** Fast incremental file transfer and synchronization
+- **Installed:** Yes
+- **Usage:** Sync directories locally or over SSH, transferring only changed bytes
+- **Install:** `sudo apt install rsync`
+- **Version Check:** `rsync --version`
+- **Usage Example:** `rsync -avz --progress src/ user@host:/dest/`
+
+### zstd
+- **What:** Fast lossless compression algorithm and CLI
+- **Installed:** Yes
+- **Usage:** Compress build artifacts, backups, and archives — faster than gzip at comparable ratios
+- **Install:** `sudo apt install zstd`
+- **Version Check:** `zstd --version`
+- **Usage Example:** `zstd -T0 -19 archive.tar` (max compression, all threads)
+
+### detox
+- **What:** Filename sanitizer — removes spaces and problematic characters
+- **Installed:** Yes
+- **Usage:** Clean up downloaded files with spaces, parentheses, Unicode, etc.
+- **Install:** `sudo apt install detox`
+- **Version Check:** `detox --version`
+- **Usage Example:** `detox -n -r ~/Downloads` (dry run), `detox -r ~/Downloads` (apply)
+
+### yt-dlp
+- **What:** Video and audio downloader for 1,000+ sites
+- **Installed:** Yes
+- **Usage:** Download video/audio from YouTube, Twitch, SoundCloud, and more; supports playlists, subtitles, format selection
+- **Install:** `sudo apt install yt-dlp`
+- **Version Check:** `yt-dlp --version`
+- **Usage Example:** `yt-dlp --extract-audio --audio-format mp3 URL`
+
+### bottom (btm)
+- **What:** Cross-platform TUI system resource monitor
+- **Installed:** Yes (snap)
+- **Usage:** Monitor CPU per-core, memory, swap, disk I/O, network, and processes in one interactive terminal UI
+- **Install:** `sudo snap install bottom`
+- **Version Check:** `btm --version`
+- **Usage:** Launch with `btm`; press `?` for help
+
 ---
 
 ## Development Editors & IDEs
@@ -284,6 +348,63 @@
 
 ---
 
+## Security & Networking
+
+### nmap
+- **What:** Network exploration and security scanning tool
+- **Installed:** Yes
+- **Usage:** Discover hosts, open ports, service versions, and OS fingerprints; network inventory and security auditing
+- **Install:** `sudo apt install nmap`
+- **Version Check:** `nmap --version`
+- **Usage Example:** `nmap -sV -O 192.168.1.0/24`
+
+### netcat (nc)
+- **What:** OpenBSD netcat — TCP/UDP Swiss army knife
+- **Installed:** Yes
+- **Usage:** Test connectivity, transfer files, create simple servers, debug network services
+- **Install:** `sudo apt install netcat-openbsd`
+- **Version Check:** `nc -h`
+- **Usage Example:** `nc -zv host 22` (port test), `nc -l 9999 > file` (receive file)
+
+### aircrack-ng
+- **What:** 802.11 WiFi security auditing suite
+- **Installed:** Yes
+- **Usage:** Capture frames, deauth clients, capture WPA handshakes, crack WEP/WPA-PSK — authorized use only
+- **Install:** `sudo apt install aircrack-ng`
+- **Version Check:** `aircrack-ng --version`
+
+### wifite + hcxtools
+- **What:** Automated WiFi auditing and PMKID/EAPOL capture tools
+- **Installed:** Yes
+- **Usage:** wifite orchestrates full capture workflow; hcxtools converts captures to hashcat format for GPU cracking — authorized use only
+- **Install:** `sudo apt install wifite hcxtools`
+
+### Tailscale
+- **What:** Zero-config WireGuard-based mesh VPN
+- **Installed:** Yes (snap)
+- **Usage:** Connect devices into a private mesh with stable IPs and automatic NAT traversal; no port forwarding required
+- **Install:** `sudo snap install tailscale`
+- **Version Check:** `tailscale version`
+- **Setup:** `sudo tailscale up` then authenticate via printed URL
+
+### NetBird
+- **What:** Open-source WireGuard overlay network with optional self-hosted control plane
+- **Installed:** Yes (snap)
+- **Usage:** Private peer-to-peer mesh networking with ACLs, DNS routes, and self-hosting option
+- **Install:** `sudo snap install netbird`
+- **Version Check:** `netbird version`
+- **Setup:** `sudo netbird up`
+
+### NordVPN
+- **What:** Commercial VPN client — NordLynx/WireGuard, OpenVPN, IKEv2
+- **Installed:** Yes (snap)
+- **Usage:** Route traffic through NordVPN servers; includes Threat Protection Lite (DNS ad/tracker blocking) and kill switch
+- **Install:** `sudo snap install nordvpn`
+- **Version Check:** `nordvpn --version`
+- **Setup:** `nordvpn login` then `nordvpn connect`
+
+---
+
 ## Security & Encryption
 
 ### VeraCrypt
@@ -331,6 +452,59 @@
 - **Usage:** Project planning, documentation, knowledge base
 - **Install:** `snap install notion-snap` or use web app at https://www.notion.so
 - **Usage:** Desktop app or web browser
+
+### NoMachine
+- **What:** High-performance remote desktop solution using the NX protocol
+- **Installed:** Optional
+- **Usage:** Remote desktop access with near-native responsiveness over LAN/WAN; supports multi-session, file transfer, audio/video streaming, USB forwarding
+- **Install:** Download latest `.deb` from https://www.nomachine.com/download and `sudo dpkg -i nomachine_*.deb`
+- **Version Check:** `nxserver --version`
+- **Note:** `nxserver` service starts automatically on boot; connect via NoMachine client on any OS
+
+### GNOME Tweaks
+- **What:** Advanced GNOME settings app beyond the standard Settings panel
+- **Installed:** Yes
+- **Usage:** Control titlebar buttons, font rendering, extensions, startup apps, and themes
+- **Install:** `sudo apt install gnome-tweaks`
+
+### GNOME Shell Extension Manager
+- **What:** Native GUI for managing GNOME Shell extensions
+- **Installed:** Yes
+- **Usage:** Browse, install, enable/disable, and configure extensions without a browser
+- **Install:** `sudo apt install gnome-shell-extension-manager`
+
+### GRUB Customizer
+- **What:** GUI for configuring the GRUB2 boot loader
+- **Installed:** Yes
+- **Usage:** Reorder boot entries, set defaults, change timeout, set resolution — no manual config editing
+- **Install:** `sudo add-apt-repository ppa:danielrichter2007/grub-customizer && sudo apt update && sudo apt install grub-customizer`
+
+### Solaar
+- **What:** Logitech Unifying/Bolt/Bluetooth device manager for Linux
+- **Installed:** Yes
+- **Usage:** Pair/unpair devices, view battery levels, configure DPI and button assignments
+- **Install:** `sudo apt install solaar`
+
+### Google Chrome
+- **What:** Google's web browser with Widevine DRM and Google account sync
+- **Installed:** Yes
+- **Usage:** Primary web browser; required for DRM-protected streaming (Netflix, etc.)
+- **Install:** Add Google apt repo, then `sudo apt install google-chrome-stable`
+- **Version Check:** `google-chrome --version`
+
+### Signal
+- **What:** End-to-end encrypted messaging and calls
+- **Installed:** Yes
+- **Usage:** Private messaging, voice/video calls; syncs with Signal mobile app
+- **Install:** Add Signal apt repo, then `sudo apt install signal-desktop`
+- **Version Check:** Signal → Help → About
+
+### Claude (desktop)
+- **What:** Anthropic Claude AI assistant — native desktop application
+- **Installed:** Yes
+- **Usage:** AI assistant with file uploads, artifact rendering, and Projects; apt-managed via community Debian repo
+- **Install:** Add aaddrick.github.io/claude-desktop-debian repo, then `sudo apt install claude-desktop`
+- **Version Check:** Claude → About
 
 ---
 

@@ -1,2 +1,3 @@
 installer-tui/target/
+installer-tui/software-inventory.json
 .claude/

@@ -1,80 +1,65 @@
-# Linux Warez List
+# linux-warez-list
 
-> Comprehensive inventory of software, tools, and configurations for an Ubuntu 22.04 LTS development machine.
-
-Complete breakdown of every dev tool, CLI utility, desktop application, extension, and font for an Ubuntu 22.04 LTS dev environment.
-
-## Contents
-
-| Name | Description |
-|------|-------------|
-| `installer` | Interactive TUI installer — run this (pre-built, Linux x86-64) |
-| `install-all.sh` | Headless script that installs everything automatically |
-| `LINUX_WAREZ_LIST.md` | Full software inventory with descriptions and install commands |
-| `gather-software-inventory.sh` | Dumps a JSON snapshot of installed packages for backup/diffing |
+> Complete Ubuntu dev environment — 65 packages across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
 
 ---
 
-## Interactive Installer (recommended)
-
-A Rust TUI that lets you browse all 40 packages by category, read descriptions, and check off exactly what you want before anything touches your system.
+## Quick Start
 
 ```bash
-# Run the pre-built binary (sudo needed for apt/snap/docker packages)
+# Interactive TUI (recommended)
 sudo ./installer
+
+# Or install everything unattended
+sudo bash install-all.sh
 ```
 
-Or build from source:
+> Requires Ubuntu 22.04 LTS (x86-64). Run with `sudo` to unlock all packages.
 
-```bash
-cd installer-tui
-cargo build --release
-sudo ./target/release/installer-tui
-```
+---
+
+## Interactive Installer
+
+A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 65 packages by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
+
+### Package selection
+
+Browse categories, read descriptions on the right, and toggle packages with `Space`. Packages requiring `sudo` are locked and dimmed if the installer isn't run as root.
+
+![Package selection screen](docs/screenshot-select.png)
+
+### Review before installing
+
+Hit `Enter` to review everything you've selected, grouped by install method, before anything touches your system.
+
+![Review screen](docs/screenshot-confirm.png)
 
 ### Controls
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` or `j` / `k` | Navigate the list |
-| `Space` | Toggle a package on/off |
-| `A` | Select all |
+| `↑` / `↓` or `j` / `k` | Navigate |
+| `Space` | Toggle package on/off |
+| `A` | Select all (unlocked) |
 | `N` | Deselect all |
-| `PgUp` / `PgDn` | Jump 10 items |
+| `PgUp` / `PgDn` | Jump 10 rows |
 | `Enter` | Review selected packages |
-| `B` / `Esc` | Go back to the list |
+| `B` / `Esc` | Back to list |
 | `Q` | Quit |
 
-### What it looks like
+Package rows are colour-coded by install method:
 
-**Package selection screen** — browse all 40 packages by category, read descriptions, and toggle what you want:
-
-![Package selection screen](docs/screenshot-select.png)
-
-**Review screen** — see everything you've selected grouped by install method before anything touches your system:
-
-![Review installation screen](docs/screenshot-confirm.png)
-
-Package rows are color-coded by install method:
-- **Cyan** `●` — `apt` package
-- **Green** `●` — shell script (curl installer)
-- **Magenta** `●` — `cargo install`
-- **Blue** `●` — `pip3 install`
-- **Yellow** `●` — `snap install`
+| Colour | Method |
+|--------|--------|
+| **Cyan** `●` | `apt` |
+| **Green** `●` | shell script |
+| **Magenta** `●` | `cargo install` |
+| **Blue** `●` | `pip3 install` |
+| **Yellow** `●` | `snap install` |
 
 ---
 
-## Headless Install (install everything)
-
-```bash
-sudo bash install-all.sh
-```
-
-Installs the full stack unattended. Useful for provisioning a fresh machine where you want everything.
-
----
-
-## Packages (40 total)
+## Packages (65 total)
 
 ### System Tools
 | Package | Method |
@@ -82,6 +67,7 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 | build-essential | apt |
 | git | apt |
 | gh (GitHub CLI) | script |
+| linux-lowlatency (kernel) | apt |
 
 ### Languages & Runtimes
 | Package | Method |
@@ -107,11 +93,29 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 | Watchman | apt |
 | FFmpeg | apt |
 | ImageMagick | apt |
+| fzf | apt |
+| hstr | apt |
+| rsync | apt |
+| zstd | apt |
+| detox | apt |
+| yt-dlp | apt |
+| bottom (btm) | snap |
 
 ### Containers
 | Package | Method |
 |---------|--------|
 | Docker + Docker Compose | script |
+
+### Security & Networking
+| Package | Method |
+|---------|--------|
+| nmap | apt |
+| netcat (nc) | apt |
+| aircrack-ng | apt |
+| wifite + hcxtools | apt |
+| Tailscale | snap |
+| NetBird | snap |
+| NordVPN | snap |
 
 ### Terminal & Shell
 | Package | Method |
@@ -157,64 +161,78 @@ Installs the full stack unattended. Useful for provisioning a fresh machine wher
 |---------|--------|
 | SimpleScreenRecorder | apt |
 | VeraCrypt | apt |
+| NoMachine | script |
+| GNOME Tweaks | apt |
+| GNOME Shell Extension Manager | apt |
+| GRUB Customizer | script |
+| Solaar | apt |
+| Google Chrome | script |
+| Signal | script |
+| Claude (desktop) | script |
 
 ---
 
-## System Info
+## Build from Source
 
-- **OS:** Ubuntu 22.04 LTS (Jammy Jellyfish)
-- **Primary Editor:** Cursor
-- **Shell:** Bash + Starship prompt
-- **Deployment:** Local / self-hosted only
+Requires Rust (stable).
 
-## Tech Stack
+```bash
+cd installer-tui
+cargo build --release
+sudo ./target/release/installer-tui
+```
 
-- Python 3.10 (primary)
-- C/C++ (embedded, RF security)
-- JavaScript / Node.js
-- Rust (systems tools)
+To update the pre-built `installer` binary after making changes:
 
-## Workflow
-
-- **Version Control:** Git + GitHub Flow
-- **Testing:** pytest + pytest-mock
-- **Data:** SQLAlchemy + SQLite
-- **Config:** Pydantic
-- **CI/CD:** GitHub Actions
-- **Build:** Make, CMake, Just
+```bash
+cp installer-tui/target/release/installer-tui installer
+chmod +x installer
+```
 
 ---
 
-## Post-Install Steps
+## Repo Contents
 
-1. Log out and back in after installing Docker (group permissions)
-2. Run `gh auth login` to authenticate the GitHub CLI
-3. Add to `~/.bashrc` after installing Starship: `eval "$(starship init bash)"`
-4. Add to `~/.bashrc` after installing direnv: `eval "$(direnv hook bash)"`
-5. Download [Cursor](https://www.cursor.com/) (not in apt)
-6. Set your terminal font to **FiraCode Nerd Font** after installing it (installer handles the download)
-7. Configure `~/.config/starship.toml` to taste
+| File | Description |
+|------|-------------|
+| `installer` | Pre-built TUI binary (Linux x86-64, run directly) |
+| `install-all.sh` | Headless script — installs everything unattended |
+| `LINUX_WAREZ_LIST.md` | Full inventory with descriptions and install commands |
+| `gather-software-inventory.sh` | Dumps a JSON snapshot of installed packages |
+| `software-inventory.json` | Current machine snapshot |
+| `installer-tui/` | Rust source for the TUI |
 
-## Updating Tools
+---
+
+## Post-Install
+
+1. **Docker** — log out and back in after install for group permissions to take effect
+2. **GitHub CLI** — run `gh auth login` to authenticate
+3. **Starship** — add to `~/.bashrc`: `eval "$(starship init bash)"`
+4. **direnv** — add to `~/.bashrc`: `eval "$(direnv hook bash)"`
+5. **hstr** — add to `~/.bashrc`: `eval "$(hstr --show-configuration)"`
+6. **FiraCode Nerd Font** — the installer sets it as the system monospace font automatically
+7. **Tailscale** — run `sudo tailscale up` after install, then authenticate via the printed URL
+8. **NordVPN** — run `nordvpn login` then `nordvpn connect`
+
+---
+
+## Updating
 
 ```bash
 # apt packages
 sudo apt update && sudo apt upgrade
 
-# Python packages
-pip install --upgrade <package>
-
 # Rust tools
-cargo install --force <tool>
+cargo install --force starship just
 
-# npm globals
-npm install -g <package>
+# Python packages
+pip install --upgrade black flake8 mypy pytest
+
+# Snap packages
+sudo snap refresh
 ```
 
 ---
 
-## License
-
-Public reference — customize as needed for your environment.
-
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-13
