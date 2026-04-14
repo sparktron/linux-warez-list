@@ -12,6 +12,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::{io, process::Command};
+extern crate libc;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ struct App {
     cursor: usize,
     screen: Screen,
     confirm_scroll: u16,
+    is_root: bool,
 }
 
 impl App {
@@ -71,6 +73,7 @@ impl App {
             cursor,
             screen: Screen::Select,
             confirm_scroll: 0,
+            is_root: is_root(),
         }
     }
 
@@ -83,13 +86,18 @@ impl App {
 
     fn toggle(&mut self) {
         if let Some(i) = self.current_pkg_idx() {
-            self.packages[i].selected = !self.packages[i].selected;
+            let locked = !self.is_root && self.packages[i].requires_root;
+            if !locked {
+                self.packages[i].selected = !self.packages[i].selected;
+            }
         }
     }
 
     fn select_all(&mut self) {
         for p in &mut self.packages {
-            p.selected = true;
+            if self.is_root || !p.requires_root {
+                p.selected = true;
+            }
         }
     }
 
@@ -245,6 +253,19 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
              && apt update && apt install -y gh",
         ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "linux-lowlatency  (kernel)",
+        "Ubuntu's low-latency kernel flavor, tuned to minimize scheduling latency for \
+         audio production, real-time workloads, and interactive desktop use. Replaces the \
+         default generic kernel with one that uses a 1000 Hz timer, voluntary preemption, \
+         and reduced latency optimizations throughout the I/O and CPU scheduler paths. \
+         Recommended for musicians, video editors, and anyone doing real-time audio/MIDI \
+         work. A reboot is required after installation for the new kernel to take effect.",
+        InstallCmd::Apt(&["linux-lowlatency"]),
         false,
         true,
     );
@@ -452,6 +473,91 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    b.pkg(
+        "fzf",
+        "General-purpose interactive fuzzy finder. Pipe any list into it for instant \
+         filtering — most commonly used as a shell history searcher (replaces Ctrl+R), \
+         interactive file picker, and git branch selector. Comes with keybindings for \
+         bash (Ctrl+R history, Ctrl+T file search, Alt+C cd). \
+         Example: `git log --oneline | fzf` or `cd $(fd -t d | fzf)`",
+        InstallCmd::Apt(&["fzf"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "hstr  (bash history)",
+        "Greatly improved bash command history. Sorts entries by frequency and recency, \
+         highlights matches, and lets you search, favorite, and re-run past commands \
+         interactively. After install, add `eval \"$(hstr --show-configuration)\"` to \
+         ~/.bashrc and bind it to Ctrl+R. Far more useful than readline's default \
+         reverse-search — especially on a machine with thousands of stored commands.",
+        InstallCmd::Apt(&["hstr"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "rsync",
+        "Fast incremental file transfer and sync tool. Transfers only changed bytes \
+         between source and destination, making repeated large-directory syncs much \
+         faster than scp or cp. Supports SSH transport, compression, permission \
+         preservation, delete sync, and dry-run mode. \
+         Example: `rsync -avz --progress src/ user@host:/dest/`",
+        InstallCmd::Apt(&["rsync"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "zstd  (compression)",
+        "Facebook's fast lossless compression algorithm and CLI. Significantly faster \
+         than gzip/bzip2 at comparable or better ratios — ideal for build artifacts, \
+         backups, and container layers. Widely used in modern package formats and kernel \
+         compression. Example: `zstd -T0 -19 archive.tar` (max compression, all CPU \
+         threads) or `zstd -d file.zst` to decompress.",
+        InstallCmd::Apt(&["zstd"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "detox",
+        "Cleans up filenames by replacing or removing problematic characters — spaces, \
+         parentheses, Unicode, and other characters that break scripts and shell \
+         globbing. Handles accented characters, CJK, and various encodings. \
+         Example: `detox -r ~/Downloads` cleans recursively; \
+         `detox -n -r .` previews changes without applying them.",
+        InstallCmd::Apt(&["detox"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "yt-dlp",
+        "Feature-rich video and audio downloader supporting 1,000+ sites including \
+         YouTube, Twitch, and SoundCloud. Fork of youtube-dl with active maintenance, \
+         faster downloads, and richer format selection. Supports playlist download, \
+         subtitle extraction, thumbnail embedding, and post-processing via FFmpeg. \
+         Example: `yt-dlp -f 'bestvideo+bestaudio' URL` or \
+         `yt-dlp --extract-audio --audio-format mp3 URL`",
+        InstallCmd::Apt(&["yt-dlp"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "bottom  (btm)",
+        "Cross-platform graphical system resource monitor for the terminal. Displays \
+         CPU usage per core, memory, swap, disk I/O, network traffic, and a filterable \
+         process list — all in one interactive TUI with scrollable graphs. Supports \
+         zooming, process killing, and multiple layout presets. A modern, more readable \
+         replacement for top and htop. Launch with `btm`. Installed via snap.",
+        InstallCmd::Snap("bottom"),
+        false,
+        true,
+    );
+
     // ── Containers ────────────────────────────────────────────────────────────
     b.cat("  Containers");
 
@@ -467,6 +573,93 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              && rm /tmp/get-docker.sh \
              && usermod -aG docker \"${SUDO_USER:-$USER}\"",
         ),
+        false,
+        true,
+    );
+
+    // ── Security & Networking ─────────────────────────────────────────────────
+    b.cat("  Security & Networking");
+
+    b.pkg(
+        "nmap",
+        "Network exploration and security scanning tool. Discovers live hosts, open \
+         ports, running services, software versions, and OS fingerprints across any \
+         network. The industry-standard tool for network inventory and security auditing. \
+         Example: `nmap -sV -O 192.168.1.0/24` (version + OS on subnet) or \
+         `nmap -p 22,80,443 host` (check specific ports).",
+        InstallCmd::Apt(&["nmap"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "netcat  (nc)",
+        "OpenBSD netcat — the Swiss army knife of TCP/UDP networking. Create arbitrary \
+         connections, set up simple listeners, transfer files, and debug network \
+         services. Available as `nc` after install. \
+         Example: `nc -zv host 22` (test port), `nc -l 9999 > file` (receive), \
+         `nc host 9999 < file` (send), `nc -l 4444 | sh` (simple shell server).",
+        InstallCmd::Apt(&["netcat-openbsd"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "aircrack-ng",
+        "Complete 802.11 WiFi security auditing suite. Capture frames (airodump-ng), \
+         inject packets (aireplay-ng), deauthenticate clients, capture WPA handshakes, \
+         and crack WEP/WPA-PSK keys (aircrack-ng). Requires a WiFi adapter with monitor \
+         mode support. Essential for authorized penetration testing on networks you own \
+         or have explicit written permission to assess.",
+        InstallCmd::Apt(&["aircrack-ng"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "wifite  +  hcxtools",
+        "Automated WiFi auditing suite. wifite orchestrates the full capture workflow — \
+         scanning for targets, deauthing clients, capturing WPA handshakes and PMKIDs — \
+         with minimal manual steps. hcxtools converts captures to hashcat format for \
+         offline GPU cracking. Requires monitor-mode hardware. For authorized use only \
+         on networks you own or have explicit permission to test.",
+        InstallCmd::Apt(&["wifite", "hcxtools"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Tailscale",
+        "Zero-config WireGuard-based mesh VPN. Every device gets a stable 100.x.x.x \
+         IP reachable from anywhere with automatic NAT traversal — no port forwarding \
+         or static IPs required. Free tier covers 100 devices. Supports Magic DNS for \
+         hostname routing, subnet routing, exit nodes, and granular ACLs. After install, \
+         run `sudo tailscale up` and authenticate via the printed URL. Via snap.",
+        InstallCmd::Snap("tailscale"),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "NetBird",
+        "Open-source WireGuard overlay network with peer-to-peer connections, automatic \
+         NAT traversal, and an optional self-hosted control plane. Connect machines into \
+         a private mesh network with ACLs, DNS routes, and network policies. Good choice \
+         when you want the flexibility of a managed VPN but with self-hosting as an \
+         option. After install: `sudo netbird up`. Installed via snap.",
+        InstallCmd::Snap("netbird"),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "NordVPN",
+        "Commercial VPN client with 6,000+ servers in 100+ countries. Uses NordLynx \
+         (WireGuard-based), OpenVPN, or IKEv2. Includes Threat Protection Lite for \
+         DNS-level ad and tracker blocking, an automatic kill switch, and split \
+         tunneling. After install: `nordvpn login` then `nordvpn connect`. \
+         Requires a NordVPN subscription. Installed via snap.",
+        InstallCmd::Snap("nordvpn"),
         false,
         true,
     );
@@ -732,6 +925,142 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    b.pkg(
+        "NoMachine",
+        "High-performance remote desktop solution using the NX protocol — significantly \
+         faster than VNC or RDP for both LAN and WAN connections. Supports full desktop \
+         access, multi-session management, file transfer, audio/video streaming, and USB \
+         device forwarding. Ideal for accessing Ubuntu desktops remotely with near-native \
+         responsiveness. Fetches the latest .deb directly from nomachine.com and installs \
+         with dpkg. The nxserver service starts automatically on boot.",
+        InstallCmd::Script(
+            "ARCH=$(dpkg --print-architecture) \
+             && NM_URL=$(curl -fsSL 'https://www.nomachine.com/download/linux&id=1' \
+             | grep -oP 'https://download\\.nomachine\\.com/download/[^\"]+\\.deb' \
+             | grep \"${ARCH}\" | head -1) \
+             && [ -n \"$NM_URL\" ] \
+             && curl -fsSL \"$NM_URL\" -o /tmp/nomachine.deb \
+             && dpkg -i /tmp/nomachine.deb \
+             && rm -f /tmp/nomachine.deb",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "GNOME Tweaks",
+        "Advanced GNOME settings not exposed in the standard Settings app. Control \
+         titlebar buttons (add minimize/maximize), adjust font rendering and hinting, \
+         manage GNOME Shell extensions, configure startup applications, and set \
+         cursor/icon/GTK/shell themes. Essential for anyone who wants meaningful \
+         control over their GNOME desktop appearance and behavior beyond the defaults.",
+        InstallCmd::Apt(&["gnome-tweaks"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "GNOME Shell Extension Manager",
+        "Native GUI for discovering, installing, enabling, and configuring GNOME Shell \
+         extensions without a browser or the extensions.gnome.org web UI. Browse the \
+         full extensions catalog, toggle extensions on/off, access per-extension \
+         settings, and check for updates — all from a clean desktop app. Replaces the \
+         cumbersome browser-extension workflow.",
+        InstallCmd::Apt(&["gnome-shell-extension-manager"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "GRUB Customizer",
+        "GUI for configuring the GRUB2 boot loader. Reorder and rename boot entries, \
+         set the default OS, change the timeout, enable/disable the splash screen, and \
+         set boot resolution — without manually editing grub config files. Useful on \
+         dual-boot systems where GRUB isn't ordering entries correctly or you want a \
+         cleaner boot menu. Requires the danielrichter2007 PPA — the installer adds \
+         it automatically before installing.",
+        InstallCmd::Script(
+            "add-apt-repository -y ppa:danielrichter2007/grub-customizer \
+             && apt update && apt install -y grub-customizer",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Solaar",
+        "Linux manager for Logitech Unifying, Bolt, and Bluetooth devices. Pair and \
+         unpair mice, keyboards, and headsets; view battery levels; configure per-device \
+         DPI, scroll speed, and button assignments; and toggle Logitech-specific \
+         protocol features. Essential for Logitech hardware users — Linux has no native \
+         Logitech Options equivalent.",
+        InstallCmd::Apt(&["solaar"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Google Chrome",
+        "Google's web browser built on Chromium. Adds Google account sync, Widevine DRM \
+         (required for Netflix and other streaming services), Google Translate, and \
+         enhanced Chrome Web Store integration on top of the Chromium base. Adds \
+         Google's apt repository so Chrome updates automatically with `apt upgrade`. \
+         Sets up the signing key and apt source, then installs via apt.",
+        InstallCmd::Script(
+            "curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+             | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+             && echo \"deb [arch=amd64 \
+             signed-by=/usr/share/keyrings/google-chrome.gpg] \
+             https://dl.google.com/linux/chrome/deb/ stable main\" \
+             | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null \
+             && apt update && apt install -y google-chrome-stable",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Signal",
+        "End-to-end encrypted messaging, voice, and video calls. Open-source protocol, \
+         no ads, no metadata collection, independently audited — the gold standard for \
+         private communication. The desktop app syncs with your phone and supports \
+         note-to-self, group chats, disappearing messages, and voice/video. Adds \
+         Signal's official apt repository for automatic updates.",
+        InstallCmd::Script(
+            "curl -fsSL https://updates.signal.org/desktop/apt/keys.asc \
+             | gpg --dearmor -o /usr/share/keyrings/signal-desktop-keyring.gpg \
+             && echo \"deb [arch=amd64 \
+             signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] \
+             https://updates.signal.org/desktop/apt xenial main\" \
+             | tee /etc/apt/sources.list.d/signal-xenial.list > /dev/null \
+             && apt update && apt install -y signal-desktop",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Claude  (desktop)",
+        "Anthropic's Claude AI assistant as a native desktop application. Full-featured \
+         interface with conversation history, file uploads, artifact rendering, and \
+         Projects for long-context work. Installed from the community-maintained Debian \
+         package repository at aaddrick.github.io/claude-desktop-debian, which tracks \
+         official Claude Desktop releases and provides apt-managed updates so Claude \
+         stays current with `apt upgrade`.",
+        InstallCmd::Script(
+            "curl -fsSL \
+             https://aaddrick.github.io/claude-desktop-debian/public-key.gpg \
+             | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg \
+             && echo \"deb [signed-by=/usr/share/keyrings/claude-desktop.gpg \
+             arch=$(dpkg --print-architecture)] \
+             https://aaddrick.github.io/claude-desktop-debian stable main\" \
+             | tee /etc/apt/sources.list.d/claude-desktop.list > /dev/null \
+             && apt update && apt install -y claude-desktop",
+        ),
+        false,
+        true,
+    );
+
     b.build()
 }
 
@@ -798,12 +1127,14 @@ fn render(f: &mut Frame, app: &mut App) {
 
 fn render_select(f: &mut Frame, app: &mut App) {
     let area = f.area();
+    // Title bar is 4 rows normally; grows to 5 when not root to fit the warning line.
+    let title_h = if app.is_root { 4 } else { 5 };
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // title bar  (2 content rows + 2 border rows)
-            Constraint::Min(0),    // list | description
-            Constraint::Length(3), // controls
+            Constraint::Length(title_h), // title bar
+            Constraint::Min(0),          // list | description
+            Constraint::Length(3),       // controls
         ])
         .split(area);
 
@@ -873,7 +1204,26 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         );
 
-    f.render_widget(Paragraph::new(vec![line1, line2]).block(block), area);
+    if app.is_root {
+        f.render_widget(Paragraph::new(vec![line1, line2]).block(block), area);
+    } else {
+        let locked_count = app.packages.iter().filter(|p| p.requires_root).count();
+        let line3 = Line::from(vec![
+            Span::styled(
+                "  ⚠ Not running as root — ",
+                Style::default().fg(C_WARN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("{} package(s) requiring sudo are locked. ", locked_count),
+                Style::default().fg(C_WARN),
+            ),
+            Span::styled(
+                "Re-run with: sudo ./installer",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            ),
+        ]);
+        f.render_widget(Paragraph::new(vec![line1, line2, line3]).block(block), area);
+    }
 }
 
 // ── Package list ─────────────────────────────────────────────────────────────
@@ -912,30 +1262,39 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
             Entry::Pkg(idx) => {
                 let pkg       = &app.packages[*idx];
                 let is_cursor = i == cursor;
+                let locked    = !app.is_root && pkg.requires_root;
                 let (dot, _badge, dot_col) = type_meta(&pkg.cmd);
 
                 // Cursor arrow (2 chars)
-                let (arrow, arrow_style) = if is_cursor {
+                let (arrow, arrow_style) = if is_cursor && !locked {
                     ("▶ ", Style::default().fg(Color::Cyan).bg(C_CURSOR).add_modifier(Modifier::BOLD))
+                } else if is_cursor {
+                    ("▶ ", Style::default().fg(C_DIM).bg(C_CURSOR))
                 } else {
                     ("  ", Style::default().fg(C_DIM))
                 };
 
                 // Type dot (1 char + 1 space = 2 chars)
-                let dot_style = if is_cursor {
+                let dot_style = if locked {
+                    Style::default().fg(C_DIM)
+                } else if is_cursor {
                     Style::default().fg(Color::White).bg(C_CURSOR)
                 } else {
                     Style::default().fg(dot_col)
                 };
 
-                // Checkbox "[x] " (4 chars)
-                let (ch, ch_col) = if pkg.selected {
+                // Checkbox "[x] " (4 chars) — locked packages show "[-]"
+                let (ch, ch_col) = if locked {
+                    ("-", C_DIM)
+                } else if pkg.selected {
                     ("x", if is_cursor { C_OK } else { Color::Green })
                 } else {
                     (" ", Color::DarkGray)
                 };
-                let brk_style  = if is_cursor { cur_bg } else { Style::default().fg(C_DIM) };
-                let ch_style   = Style::default().fg(ch_col)
+                let brk_col   = if locked { C_DIM } else if is_cursor { Color::White } else { C_DIM };
+                let brk_style = Style::default().fg(brk_col)
+                    .bg(if is_cursor { C_CURSOR } else { Color::Reset });
+                let ch_style  = Style::default().fg(ch_col)
                     .bg(if is_cursor { C_CURSOR } else { Color::Reset });
 
                 // Name (padded / truncated to name_w chars)
@@ -946,7 +1305,9 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                 } else {
                     " ".repeat(name_w)
                 };
-                let name_style = if is_cursor {
+                let name_style = if locked {
+                    Style::default().fg(C_DIM)
+                } else if is_cursor {
                     cur_bold
                 } else if pkg.selected {
                     Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
@@ -955,7 +1316,14 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                 };
 
                 // Root badge " [root]  " (9 chars) or 9 spaces
-                let (root_txt, root_sty) = if pkg.requires_root {
+                // Locked packages show " [sudo]  " in dim to signal why they're locked.
+                let (root_txt, root_sty) = if locked {
+                    (
+                        " [sudo]  ",
+                        Style::default().fg(C_DIM)
+                            .bg(if is_cursor { C_CURSOR } else { Color::Reset }),
+                    )
+                } else if pkg.requires_root {
                     (
                         " [root]  ",
                         if is_cursor {
@@ -1240,7 +1608,7 @@ fn render_confirm(f: &mut Frame, app: &App) {
             lines.push(Line::from(vec![
                 Span::styled("  [!] ", Style::default().fg(C_WARN).add_modifier(Modifier::BOLD)),
                 Span::styled("Packages marked [root] require sudo. Run with: ", Style::default().fg(C_WARN)),
-                Span::styled("sudo installer-tui", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled("sudo ./installer", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             ]));
             lines.push(Line::from(""));
         }
@@ -1276,6 +1644,10 @@ fn render_confirm(f: &mut Frame, app: &App) {
 }
 
 // ─── Installation ─────────────────────────────────────────────────────────────
+
+fn is_root() -> bool {
+    unsafe { libc::geteuid() == 0 }
+}
 
 fn run_install(packages: Vec<Package>) {
     if packages.is_empty() {

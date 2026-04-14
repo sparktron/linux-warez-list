@@ -39,6 +39,10 @@ apt install -y build-essential
 log "Installing Git..."
 apt install -y git
 
+log "Installing low-latency kernel..."
+apt install -y linux-lowlatency
+warn "Reboot required after installation for low-latency kernel to take effect"
+
 log "Installing GitHub CLI..."
 apt install -y gh || {
   warn "gh not in default repos, installing from GitHub source..."
@@ -125,6 +129,27 @@ apt install -y ffmpeg
 log "Installing ImageMagick..."
 apt install -y imagemagick
 
+log "Installing fzf..."
+apt install -y fzf
+
+log "Installing hstr (bash history)..."
+apt install -y hstr
+
+log "Installing rsync..."
+apt install -y rsync
+
+log "Installing zstd..."
+apt install -y zstd
+
+log "Installing detox..."
+apt install -y detox
+
+log "Installing yt-dlp..."
+apt install -y yt-dlp
+
+log "Installing bottom (btm) via snap..."
+snap install bottom
+
 # ===== CONTAINER & VIRTUALIZATION =====
 echo ""
 echo "🐳 Installing container tools..."
@@ -140,6 +165,31 @@ if ! command -v docker &> /dev/null; then
 else
   log "Docker already installed: $(docker --version)"
 fi
+
+# ===== SECURITY & NETWORKING =====
+echo ""
+echo "🔒 Installing security and networking tools..."
+
+log "Installing nmap..."
+apt install -y nmap
+
+log "Installing netcat (OpenBSD)..."
+apt install -y netcat-openbsd
+
+log "Installing aircrack-ng..."
+apt install -y aircrack-ng
+
+log "Installing wifite + hcxtools..."
+apt install -y wifite hcxtools
+
+log "Installing Tailscale via snap..."
+snap install tailscale
+
+log "Installing NetBird via snap..."
+snap install netbird
+
+log "Installing NordVPN via snap..."
+snap install nordvpn
 
 # ===== TERMINAL & SHELL =====
 echo ""
@@ -245,6 +295,60 @@ apt install -y simplescreenrecorder
 
 log "Installing VeraCrypt..."
 apt install -y veracrypt 2>/dev/null || warn "VeraCrypt not in default repos"
+
+log "Installing GNOME Tweaks..."
+apt install -y gnome-tweaks
+
+log "Installing GNOME Shell Extension Manager..."
+apt install -y gnome-shell-extension-manager
+
+log "Installing GRUB Customizer..."
+add-apt-repository -y ppa:danielrichter2007/grub-customizer
+apt update
+apt install -y grub-customizer
+
+log "Installing Solaar (Logitech device manager)..."
+apt install -y solaar
+
+log "Installing Google Chrome..."
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+  | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] \
+  https://dl.google.com/linux/chrome/deb/ stable main" \
+  | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+apt update
+apt install -y google-chrome-stable
+
+log "Installing Signal..."
+curl -fsSL https://updates.signal.org/desktop/apt/keys.asc \
+  | gpg --dearmor -o /usr/share/keyrings/signal-desktop-keyring.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] \
+  https://updates.signal.org/desktop/apt xenial main" \
+  | tee /etc/apt/sources.list.d/signal-xenial.list > /dev/null
+apt update
+apt install -y signal-desktop
+
+log "Installing Claude (desktop)..."
+curl -fsSL https://aaddrick.github.io/claude-desktop-debian/public-key.gpg \
+  | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg
+echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=$(dpkg --print-architecture)] \
+  https://aaddrick.github.io/claude-desktop-debian stable main" \
+  | tee /etc/apt/sources.list.d/claude-desktop.list > /dev/null
+apt update
+apt install -y claude-desktop
+
+log "Installing NoMachine..."
+ARCH=$(dpkg --print-architecture)
+NM_URL=$(curl -fsSL 'https://www.nomachine.com/download/linux&id=1' \
+  | grep -oP 'https://download\.nomachine\.com/download/[^"]+\.deb' \
+  | grep "${ARCH}" | head -1)
+if [ -n "$NM_URL" ]; then
+  curl -fsSL "$NM_URL" -o /tmp/nomachine.deb
+  dpkg -i /tmp/nomachine.deb
+  rm -f /tmp/nomachine.deb
+else
+  warn "Could not determine NoMachine download URL — visit https://www.nomachine.com/download"
+fi
 
 # ===== CLEANUP =====
 echo ""
