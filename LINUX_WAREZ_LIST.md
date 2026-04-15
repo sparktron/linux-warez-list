@@ -52,6 +52,30 @@
 - **Note:** Reboot required after installation for new kernel to take effect
 - **Version Check:** `uname -r` (after reboot, should show `-lowlatency` suffix)
 
+### snapd
+- **What:** Snap package manager daemon and core runtime
+- **Installed:** Usually pre-installed on Ubuntu Desktop; may be absent on minimal/server installs
+- **Usage:** Required for installing snap packages (Discord, Slack, Spotify, Tailscale, NordVPN, bottom, etc.)
+- **Install:** `sudo apt install snapd && sudo snap install core`
+
+### curl
+- **What:** Command-line tool for transferring data with URLs
+- **Installed:** Usually pre-installed; may be absent on minimal installs
+- **Usage:** HTTP/HTTPS/FTP downloads, API calls, piping install scripts
+- **Install:** `sudo apt install curl`
+
+### wget
+- **What:** Non-interactive network file downloader
+- **Installed:** Usually pre-installed; may be absent on minimal installs
+- **Usage:** Bulk downloads, recursive mirroring, retry-on-failure downloads
+- **Install:** `sudo apt install wget`
+
+### unzip
+- **What:** .zip archive extraction utility
+- **Installed:** May not be present on minimal installs
+- **Usage:** Extract zip files; required by the FiraCode Nerd Font installer
+- **Install:** `sudo apt install unzip`
+
 ---
 
 ## Development Languages & Runtimes
@@ -239,6 +263,69 @@
 - **Version Check:** `yt-dlp --version`
 - **Usage Example:** `yt-dlp --extract-audio --audio-format mp3 URL`
 
+### htop
+- **What:** Interactive process viewer and system monitor
+- **Installed:** Yes
+- **Usage:** Real-time CPU, memory, swap monitoring with sortable/filterable process list and tree view
+- **Install:** `sudo apt install htop`
+- **Usage:** `htop`, F4 to filter, F5 for tree, F9 to kill
+
+### tree
+- **What:** Recursive directory listing in tree format
+- **Installed:** Yes
+- **Usage:** Visualize directory structures for orientation and documentation
+- **Install:** `sudo apt install tree`
+- **Usage Example:** `tree -L 2 src/`
+
+### strace
+- **What:** System call tracer for Linux processes
+- **Installed:** Yes
+- **Usage:** Debug programs that fail silently, diagnose permission issues, trace file/network access
+- **Install:** `sudo apt install strace`
+- **Usage Example:** `strace -f -e trace=open,read,write ./program`
+
+### ShellCheck
+- **What:** Static analysis tool for bash/shell scripts
+- **Installed:** Yes
+- **Usage:** Find bugs, pitfalls, and style issues in shell scripts; integrates with editors
+- **Install:** `sudo apt install shellcheck`
+- **Usage Example:** `shellcheck install-all.sh`
+
+### duf
+- **What:** Modern disk usage/free utility (replacement for df)
+- **Installed:** Yes
+- **Usage:** Display mounted filesystems with color-coded usage bars in a clean table
+- **Install:** `sudo apt install duf`
+- **Usage:** `duf` or `duf /home`
+
+### ncdu
+- **What:** Interactive disk usage analyzer with ncurses TUI
+- **Installed:** Yes
+- **Usage:** Scan directory trees and navigate sorted list of space consumers; delete directly
+- **Install:** `sudo apt install ncdu`
+- **Usage Example:** `ncdu /` or `ncdu ~/projects`
+
+### xclip
+- **What:** Command-line interface to the X11 clipboard
+- **Installed:** Yes
+- **Usage:** Copy stdout to clipboard, paste clipboard to stdout; essential for terminal-to-GUI workflows
+- **Install:** `sudo apt install xclip`
+- **Usage Example:** `cat file.txt | xclip -selection clipboard`
+
+### pipx
+- **What:** Install Python CLI tools in isolated virtual environments
+- **Installed:** Yes
+- **Usage:** Install Python tools globally without polluting system Python; each tool gets its own venv
+- **Install:** `sudo apt install pipx`
+- **Usage Example:** `pipx install black`
+
+### lazygit
+- **What:** Terminal UI for git operations
+- **Installed:** Yes (from GitHub release binary)
+- **Usage:** Stage hunks, resolve conflicts, browse history, manage branches in a keyboard-driven TUI
+- **Install:** Download from https://github.com/jesseduffield/lazygit/releases
+- **Usage:** `lazygit` from any git repo
+
 ### bottom (btm)
 - **What:** Cross-platform TUI system resource monitor
 - **Installed:** Yes (snap)
@@ -403,6 +490,27 @@
 - **Version Check:** `nordvpn --version`
 - **Setup:** `nordvpn login` then `nordvpn connect`
 
+### OpenSSH Server (sshd)
+- **What:** Secure Shell daemon for remote login
+- **Installed:** Yes
+- **Usage:** Remote terminal access, SCP/SFTP file transfers, SSH tunneling
+- **Install:** `sudo apt install openssh-server && sudo systemctl enable --now ssh`
+- **Connect:** `ssh user@hostname`
+
+### net-tools
+- **What:** Legacy networking utilities (ifconfig, netstat, route, arp)
+- **Installed:** Yes
+- **Usage:** Network diagnostics; superseded by iproute2 but still widely used
+- **Install:** `sudo apt install net-tools`
+- **Usage Example:** `ifconfig`, `netstat -tlnp`, `route -n`
+
+### WireGuard Tools (wg)
+- **What:** Userspace utilities for WireGuard VPN tunnels
+- **Installed:** Yes
+- **Usage:** Create and manage WireGuard tunnels; useful alongside Tailscale/NetBird for manual configs
+- **Install:** `sudo apt install wireguard-tools`
+- **Usage Example:** `sudo wg show`, `sudo wg-quick up wg0`
+
 ---
 
 ## Security & Encryption
@@ -484,6 +592,20 @@
 - **Installed:** Yes
 - **Usage:** Pair/unpair devices, view battery levels, configure DPI and button assignments
 - **Install:** `sudo apt install solaar`
+
+### Meld
+- **What:** Visual diff and merge tool for files and directories
+- **Installed:** Yes
+- **Usage:** Side-by-side comparison with inline highlighting, three-way merge, directory diff/sync; integrates as git difftool/mergetool
+- **Install:** `sudo apt install meld`
+- **Setup:** `git config --global diff.tool meld`
+
+### Peek
+- **What:** Simple animated GIF screen recorder
+- **Installed:** Yes
+- **Usage:** Select a screen region and record to GIF, APNG, MP4, or WebM; ideal for quick demos and bug reproductions
+- **Install:** `sudo apt install peek`
+- **Note:** Works best on X11; limited Wayland support
 
 ### Google Chrome
 - **What:** Google's web browser with Widevine DRM and Google account sync
@@ -588,6 +710,13 @@
 - **Installed:** Yes (default)
 - **Usage:** Tab-completion for commands and arguments
 - **Install:** `sudo apt install bash-completion`
+
+### tmux
+- **What:** Terminal multiplexer with session persistence
+- **Installed:** Yes
+- **Usage:** Multiple shell sessions in one terminal, split panes, detach/reattach sessions that survive disconnects
+- **Install:** `sudo apt install tmux`
+- **Usage:** `tmux new -s work`, `Ctrl+B d` to detach, `tmux attach -t work` to reattach
 
 ---
 

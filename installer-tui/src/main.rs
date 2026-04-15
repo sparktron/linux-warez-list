@@ -245,10 +245,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          your terminal. Run `gh auth login` after installation to authenticate with your \
          GitHub account.",
         InstallCmd::Script(
-            "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-             | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+            "(type -p wget >/dev/null || apt install -y wget) \
+             && mkdir -p /etc/apt/keyrings \
+             && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+             | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+             && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
              && echo \"deb [arch=$(dpkg --print-architecture) \
-             signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
+             signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] \
              https://cli.github.com/packages stable main\" \
              | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
              && apt update && apt install -y gh",
@@ -260,13 +263,64 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     b.pkg(
         "linux-lowlatency  (kernel)",
         "Ubuntu's low-latency kernel flavor, tuned to minimize scheduling latency for \
-         audio production, real-time workloads, and interactive desktop use. Replaces the \
-         default generic kernel with one that uses a 1000 Hz timer, voluntary preemption, \
-         and reduced latency optimizations throughout the I/O and CPU scheduler paths. \
-         Recommended for musicians, video editors, and anyone doing real-time audio/MIDI \
-         work. A reboot is required after installation for the new kernel to take effect.",
+         real-time workloads and interactive use. Replaces the default generic kernel with \
+         one that uses a 1000 Hz timer, voluntary preemption, and reduced latency \
+         optimizations throughout the I/O and CPU scheduler paths. Required on Mythos \
+         production vessels for real-time control loops and sensor processing — the \
+         sys_monitor_service checks the running kernel version against the configured \
+         instance config. Also recommended for audio production and video editing. \
+         A reboot is required after installation. Verify with: uname -r",
         InstallCmd::Apt(&["linux-lowlatency"]),
         false,
+        true,
+    );
+
+    b.pkg(
+        "snapd",
+        "Snap package manager daemon. Required for installing snap packages (Discord, \
+         Slack, Spotify, Tailscale, NordVPN, bottom, etc.). Usually pre-installed on \
+         Ubuntu desktop but may be absent on minimal or server installs. If snap commands \
+         fail with 'command not found', install this first. Also installs the snap core \
+         runtime.",
+        InstallCmd::Script(
+            "apt install -y snapd && snap install core",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "curl",
+        "Command-line tool for transferring data with URLs. Supports HTTP, HTTPS, FTP, \
+         SCP, SFTP, and dozens more protocols. Fundamental building block used by many \
+         other install scripts in this installer (Docker, Rust, Node.js, Chrome, etc.). \
+         Usually pre-installed on Ubuntu desktop but may be absent on minimal installs. \
+         Example: `curl -fsSL https://example.com/script.sh | sh`",
+        InstallCmd::Apt(&["curl"]),
+        true,
+        true,
+    );
+
+    b.pkg(
+        "wget",
+        "Non-interactive network downloader. Retrieves files from HTTP, HTTPS, and FTP \
+         servers with support for recursive downloads, retry on failure, and bandwidth \
+         throttling. More robust than curl for bulk downloads and mirroring. Used by the \
+         GitHub CLI installer in this script. \
+         Example: `wget -qO- https://example.com/key.gpg | tee keyring.gpg`",
+        InstallCmd::Apt(&["wget"]),
+        true,
+        true,
+    );
+
+    b.pkg(
+        "unzip",
+        "Extraction utility for .zip archives. Required by the FiraCode Nerd Font \
+         installer in this script and commonly needed for downloading release archives \
+         from GitHub. Not always present on minimal Ubuntu installs. \
+         Example: `unzip -o archive.zip -d /target/dir`",
+        InstallCmd::Apt(&["unzip"]),
+        true,
         true,
     );
 
@@ -303,10 +357,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Systems programming language with compile-time memory safety and no garbage collector. \
          Installed via rustup (official toolchain manager), which also installs cargo \
          (package/build manager) and rustc (compiler). Excellent for CLI tools, WebAssembly, \
-         embedded systems, and high-performance code. Required for Starship and Just below.",
+         embedded systems, and high-performance code. Required for Starship and Just below. \
+         When run via sudo, installs into the invoking user's home directory (not root's).",
         InstallCmd::Script(
-            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-             && . \"$HOME/.cargo/env\"",
+            "REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && sudo -u \"${REAL_USER}\" bash -c \
+             'curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'",
         ),
         false,
         false,
@@ -324,12 +380,15 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "Clang  +  LLVM",
+        "Clang 14  +  LLVM  +  clang-format-12",
         "Alternative C/C++ compiler front-end with significantly better error messages than \
          GCC. LLVM provides the underlying infrastructure and enables powerful tools: \
          clang-format (auto-formatting), clang-tidy (static analysis), AddressSanitizer \
-         (memory error detection), and UBSan (undefined behavior detector).",
-        InstallCmd::Apt(&["clang", "llvm", "llvm-dev"]),
+         (memory error detection), and UBSan (undefined behavior detector). Includes \
+         clang-format-12 which is required by the Mythos AV stack for code formatting. \
+         On Ubuntu 22.04 the bare 'clang' metapackage resolves to Clang 14, which is the \
+         version Mythos pins. Do NOT install a different clang version (e.g. clang-15/16).",
+        InstallCmd::Apt(&["clang", "clang-format-12", "llvm", "llvm-dev"]),
         false,
         true,
     );
@@ -410,9 +469,16 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "CMake",
         "Cross-platform build system generator — the standard for C and C++ projects. Write \
          one CMakeLists.txt and generate platform-appropriate build files (Makefiles, Ninja, \
-         MSVC projects). Example: \
-         `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`",
-        InstallCmd::Apt(&["cmake"]),
+         MSVC projects). Note: Mythos installs CMake 3.18.1 from source to /usr/local/bin, \
+         which takes PATH precedence over this apt version. Both can coexist safely. \
+         Example: `cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`",
+        InstallCmd::Script(
+            "if [ -x /usr/local/bin/cmake ]; then \
+               echo 'CMake already at /usr/local/bin/cmake, skipping apt install'; \
+             else \
+               apt install -y cmake; \
+             fi",
+        ),
         false,
         true,
     );
@@ -455,6 +521,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Comprehensive multimedia framework for encoding, decoding, transcoding, muxing, and \
          streaming audio and video. Convert between virtually any format, extract frames, \
          strip audio, add subtitles, generate thumbnails, or livestream — all from the CLI. \
+         The apt version on 22.04 (4.4.x) is compatible with the Mythos video pipeline. Do \
+         NOT install FFmpeg from a PPA or snap that ships a different libavcodec SO version. \
          Example: `ffmpeg -i input.mov -c:v libx264 output.mp4`",
         InstallCmd::Apt(&["ffmpeg"]),
         false,
@@ -547,6 +615,118 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
+        "htop",
+        "Interactive process viewer and system monitor. Shows CPU cores, memory, swap, \
+         and a sortable/filterable process list with tree view. Lighter and more widely \
+         available than bottom (btm). Universally expected on Linux systems. \
+         Example: `htop` then press F4 to filter, F5 for tree view, F9 to kill.",
+        InstallCmd::Apt(&["htop"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "tree",
+        "Recursive directory listing that produces a tree-like indented output of file \
+         and directory structure. Invaluable for understanding project layouts, documenting \
+         directory hierarchies, and quick orientation in unfamiliar codebases. \
+         Example: `tree -L 2 src/` or `tree -I 'node_modules|__pycache__'`",
+        InstallCmd::Apt(&["tree"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "strace",
+        "System call tracer for Linux. Intercepts and records every system call made by a \
+         process and every signal received. Essential for debugging programs that fail \
+         silently, diagnosing permission issues, and understanding program behavior at \
+         the OS level. Pairs well with GDB and Valgrind. \
+         Example: `strace -f -e trace=open,read,write ./program`",
+        InstallCmd::Apt(&["strace"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "ShellCheck",
+        "Static analysis tool for bash and shell scripts. Finds common bugs, pitfalls, \
+         and style issues — unquoted variables, useless uses of cat, wrong test syntax, \
+         and hundreds more. Integrates with most editors (Cursor, VS Code, Vim). Run on \
+         any shell script before committing. \
+         Example: `shellcheck install-all.sh`",
+        InstallCmd::Apt(&["shellcheck"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "duf",
+        "Modern replacement for `df` (disk free). Displays mounted filesystems with \
+         usage bars, color-coded by fullness, in a clean table. Groups local disks, \
+         network mounts, and special filesystems separately. Much easier to read than \
+         `df -h`. Example: `duf` or `duf /home`",
+        InstallCmd::Apt(&["duf"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "ncdu",
+        "Interactive disk usage analyzer with an ncurses TUI. Scans a directory tree and \
+         presents a sorted, navigable list of what's consuming space. Navigate with arrow \
+         keys, press d to delete, and drill into subdirectories. Much faster than manually \
+         running `du | sort`. Example: `ncdu /` or `ncdu ~/projects`",
+        InstallCmd::Apt(&["ncdu"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "xclip",
+        "Command-line interface to the X11 clipboard. Pipe stdout to the clipboard or \
+         paste clipboard contents to stdout. Essential for terminal-to-GUI workflows. \
+         Example: `cat file.txt | xclip -selection clipboard` (copy), \
+         `xclip -selection clipboard -o` (paste), \
+         or `pwd | xclip -sel clip` to copy the current path.",
+        InstallCmd::Apt(&["xclip"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "pipx",
+        "Install and run Python CLI applications in isolated virtual environments. Unlike \
+         `pip install`, pipx gives each tool its own venv so packages never conflict. \
+         The right way to install Python CLI tools globally (black, flake8, mypy, etc.) \
+         without polluting your system Python. \
+         Example: `pipx install black` then just run `black .`",
+        InstallCmd::Apt(&["pipx"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "lazygit",
+        "Terminal UI for git. Stage individual hunks, resolve merge conflicts, browse \
+         commit history, manage branches, cherry-pick, rebase interactively — all from \
+         a fast keyboard-driven TUI. Far more productive than raw git commands for \
+         complex operations. Installed from the official GitHub release binary. \
+         Launch with `lazygit` from any git repository.",
+        InstallCmd::Script(
+            "LAZYGIT_VERSION=$(curl -s https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
+             | grep -Po '\"tag_name\": \"v\\K[^\"]*') \
+             && curl -Lo /tmp/lazygit.tar.gz \
+             \"https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz\" \
+             && tar xf /tmp/lazygit.tar.gz -C /tmp lazygit \
+             && install /tmp/lazygit /usr/local/bin \
+             && rm -f /tmp/lazygit /tmp/lazygit.tar.gz",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
         "bottom  (btm)",
         "Cross-platform graphical system resource monitor for the terminal. Displays \
          CPU usage per core, memory, swap, disk I/O, network traffic, and a filterable \
@@ -570,8 +750,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh \
              && sh /tmp/get-docker.sh \
-             && rm /tmp/get-docker.sh \
-             && usermod -aG docker \"${SUDO_USER:-$USER}\"",
+             && rm -f /tmp/get-docker.sh \
+             && usermod -aG docker \"${SUDO_USER:-$USER}\" \
+             && echo 'Log out and back in for Docker group permissions'",
         ),
         false,
         true,
@@ -664,6 +845,41 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    b.pkg(
+        "OpenSSH Server  (sshd)",
+        "Secure Shell daemon — allows remote login to this machine over SSH. Not installed \
+         by default on Ubuntu desktop. Essential for remote access, SCP/SFTP file transfers, \
+         and tunneling. Starts automatically on boot after install. \
+         After install: `sudo systemctl enable --now ssh`. \
+         Connect from another machine: `ssh user@hostname`",
+        InstallCmd::Apt(&["openssh-server"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "net-tools",
+        "Legacy but widely-used networking utilities: ifconfig, netstat, route, arp, and \
+         others. Officially superseded by iproute2 (`ip`, `ss`) but still expected by many \
+         scripts, tutorials, and muscle-memory habits. Useful alongside the modern tools. \
+         Example: `ifconfig`, `netstat -tlnp`, `route -n`",
+        InstallCmd::Apt(&["net-tools"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "WireGuard Tools  (wg)",
+        "Userspace utilities for WireGuard, the modern in-kernel VPN. Create, configure, \
+         and manage WireGuard tunnels with `wg` and `wg-quick`. Useful even alongside \
+         Tailscale or NetBird for manual point-to-point tunnels or debugging. The kernel \
+         module is built-in since Linux 5.6. \
+         Example: `sudo wg show` or `sudo wg-quick up wg0`",
+        InstallCmd::Apt(&["wireguard-tools"]),
+        false,
+        true,
+    );
+
     // ── Terminal & Shell ──────────────────────────────────────────────────────
     b.cat("  Terminal & Shell");
 
@@ -685,6 +901,18 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          choice; popular alternatives include Kitty (GPU-accelerated), Alacritty (fast/minimal), \
          and WezTerm (Lua-configurable).",
         InstallCmd::Apt(&["gnome-terminal"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "tmux",
+        "Terminal multiplexer — run multiple shell sessions inside a single terminal, \
+         split into panes, and detach/reattach sessions that survive SSH disconnects. \
+         Essential for remote work: start a long build, detach, disconnect, come back \
+         later and reattach. Supports custom keybindings and scripting. \
+         Example: `tmux new -s work`, then `Ctrl+B d` to detach, `tmux attach -t work`",
+        InstallCmd::Apt(&["tmux"]),
         false,
         true,
     );
@@ -731,12 +959,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "SQLAlchemy",
+        "SQLAlchemy  (pinned 2.0.19)",
         "The most widely-used Python SQL toolkit and ORM (Object-Relational Mapper). Define \
          database tables as Python classes and query with Python instead of raw SQL. Supports \
          PostgreSQL, MySQL, SQLite — switch backends with minimal code changes. Used in Flask, \
-         FastAPI, and standalone scripts. Pairs well with Alembic for migrations.",
-        InstallCmd::Pip(&["SQLAlchemy"]),
+         FastAPI, and standalone scripts. Pairs well with Alembic for migrations. Pinned to \
+         2.0.19 for compatibility with the Mythos AV stack requirements.txt.",
+        InstallCmd::Pip(&["SQLAlchemy==2.0.19"]),
         false,
         false,
     );
@@ -786,12 +1015,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "requests  (HTTP library)",
+        "requests  (pinned 2.31.0)",
         "The most popular HTTP library for Python — simple, elegant, and human-friendly. \
          Make GET, POST, PUT, DELETE requests with automatic JSON handling, session management, \
-         authentication helpers, and connection pooling. \
+         authentication helpers, and connection pooling. Pinned to 2.31.0 for compatibility \
+         with the Mythos AV stack requirements.txt. \
          Example: `r = requests.get(url, headers={...}); data = r.json()`",
-        InstallCmd::Pip(&["requests"]),
+        InstallCmd::Pip(&["requests==2.31.0"]),
         false,
         false,
     );
@@ -940,7 +1170,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              | grep \"${ARCH}\" | head -1) \
              && [ -n \"$NM_URL\" ] \
              && curl -fsSL \"$NM_URL\" -o /tmp/nomachine.deb \
-             && dpkg -i /tmp/nomachine.deb \
+             && (dpkg -i /tmp/nomachine.deb || apt install -f -y) \
              && rm -f /tmp/nomachine.deb",
         ),
         false,
@@ -1000,6 +1230,29 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
+        "Meld",
+        "Visual diff and merge tool for files and directories. Side-by-side comparison \
+         with inline highlighting, three-way merge support, and directory diff/sync. \
+         Integrates with git as a difftool and mergetool. Far more readable than terminal \
+         diffs for large changes. \
+         Setup: `git config --global diff.tool meld` then `git difftool`",
+        InstallCmd::Apt(&["meld"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Peek",
+        "Simple animated GIF screen recorder. Select a screen region and record to GIF, \
+         APNG, MP4, or WebM. Ideal for quick bug reproductions, PR demos, and documentation. \
+         Much lighter than SimpleScreenRecorder when you just need a short clip. \
+         Limitation: Wayland support is limited — works best on X11.",
+        InstallCmd::Apt(&["peek"]),
+        false,
+        true,
+    );
+
+    b.pkg(
         "Google Chrome",
         "Google's web browser built on Chromium. Adds Google account sync, Widevine DRM \
          (required for Netflix and other streaming services), Google Translate, and \
@@ -1008,7 +1261,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          Sets up the signing key and apt source, then installs via apt.",
         InstallCmd::Script(
             "curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-             | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+             | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg \
              && echo \"deb [arch=amd64 \
              signed-by=/usr/share/keyrings/google-chrome.gpg] \
              https://dl.google.com/linux/chrome/deb/ stable main\" \
@@ -1028,7 +1281,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          Signal's official apt repository for automatic updates.",
         InstallCmd::Script(
             "curl -fsSL https://updates.signal.org/desktop/apt/keys.asc \
-             | gpg --dearmor -o /usr/share/keyrings/signal-desktop-keyring.gpg \
+             | gpg --dearmor --yes -o /usr/share/keyrings/signal-desktop-keyring.gpg \
              && echo \"deb [arch=amd64 \
              signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] \
              https://updates.signal.org/desktop/apt xenial main\" \
@@ -1050,7 +1303,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "curl -fsSL \
              https://aaddrick.github.io/claude-desktop-debian/public-key.gpg \
-             | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg \
+             | gpg --dearmor --yes -o /usr/share/keyrings/claude-desktop.gpg \
              && echo \"deb [signed-by=/usr/share/keyrings/claude-desktop.gpg \
              arch=$(dpkg --print-architecture)] \
              https://aaddrick.github.io/claude-desktop-debian stable main\" \
@@ -1682,13 +1935,32 @@ fn run_install(packages: Vec<Package>) {
     for (idx, pkg) in packages.iter().enumerate() {
         println!("{c}[{}/{}]{x} {y}Installing: {}{x}", idx + 1, total, pkg.name);
 
+        let real_user = std::env::var("SUDO_USER").unwrap_or_else(|_| {
+            std::env::var("USER").unwrap_or_else(|_| "root".to_string())
+        });
+
         let result = match &pkg.cmd {
             InstallCmd::Apt(pkgs) => Command::new("apt")
                 .args(["install", "-y"])
                 .args(*pkgs)
                 .status(),
             InstallCmd::Script(script) => Command::new("sh").args(["-c", script]).status(),
-            InstallCmd::Cargo(name) => Command::new("cargo").args(["install", name]).status(),
+            InstallCmd::Cargo(name) => {
+                let real_home = std::env::var("SUDO_USER")
+                    .ok()
+                    .and_then(|u| {
+                        Command::new("sh")
+                            .args(["-c", &format!("eval echo ~{}", u)])
+                            .output()
+                            .ok()
+                            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    })
+                    .unwrap_or_else(|| std::env::var("HOME").unwrap_or_default());
+                let cargo_bin = format!("{}/.cargo/bin/cargo", real_home);
+                Command::new("sudo")
+                    .args(["-u", &real_user, &cargo_bin, "install", name])
+                    .status()
+            }
             InstallCmd::Pip(pkgs) => Command::new("pip3").arg("install").args(*pkgs).status(),
             InstallCmd::Snap(name) => Command::new("snap").args(["install", name]).status(),
         };

@@ -1,6 +1,6 @@
 # linux-warez-list
 
-> Complete Ubuntu dev environment — 65 packages across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
+> Complete Ubuntu dev environment — 84 packages across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
 
 ---
 
@@ -20,7 +20,7 @@ sudo bash install-all.sh
 
 ## Interactive Installer
 
-A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 65 packages by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 84 packages by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
 
 ### Package selection
 
@@ -59,7 +59,7 @@ Package rows are colour-coded by install method:
 
 ---
 
-## Packages (65 total)
+## Packages (84 total)
 
 ### System Tools
 | Package | Method |
@@ -68,6 +68,10 @@ Package rows are colour-coded by install method:
 | git | apt |
 | gh (GitHub CLI) | script |
 | linux-lowlatency (kernel) | apt |
+| snapd | script |
+| curl | apt |
+| wget | apt |
+| unzip | apt |
 
 ### Languages & Runtimes
 | Package | Method |
@@ -99,6 +103,15 @@ Package rows are colour-coded by install method:
 | zstd | apt |
 | detox | apt |
 | yt-dlp | apt |
+| htop | apt |
+| tree | apt |
+| strace | apt |
+| ShellCheck | apt |
+| duf | apt |
+| ncdu | apt |
+| xclip | apt |
+| pipx | apt |
+| lazygit | script |
 | bottom (btm) | snap |
 
 ### Containers
@@ -116,12 +129,16 @@ Package rows are colour-coded by install method:
 | Tailscale | snap |
 | NetBird | snap |
 | NordVPN | snap |
+| OpenSSH Server (sshd) | apt |
+| net-tools | apt |
+| WireGuard Tools (wg) | apt |
 
 ### Terminal & Shell
 | Package | Method |
 |---------|--------|
 | bash-completion | apt |
 | GNOME Terminal | apt |
+| tmux | apt |
 
 ### Rust Tools
 | Package | Method |
@@ -166,6 +183,8 @@ Package rows are colour-coded by install method:
 | GNOME Shell Extension Manager | apt |
 | GRUB Customizer | script |
 | Solaar | apt |
+| Meld | apt |
+| Peek | apt |
 | Google Chrome | script |
 | Signal | script |
 | Claude (desktop) | script |

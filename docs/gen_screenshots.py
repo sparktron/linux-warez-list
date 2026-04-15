@@ -42,6 +42,10 @@ PKGS = [
     ("git",                             "c",   True,  True,  False),
     ("gh  (GitHub CLI)",                "lg",  False, True,  False),
     ("linux-lowlatency  (kernel)",      "c",   False, True,  False),
+    ("snapd",                           "lg",  False, True,  False),
+    ("curl",                            "c",   True,  True,  False),
+    ("wget",                            "c",   True,  True,  False),
+    ("unzip",                           "c",   True,  True,  False),
     ("Languages & Runtimes",            None,  None,  None,  False),
     ("Python 3.10  +  pip  +  venv",    "c",   True,  True,  False),
     ("Node.js 20  +  npm",              "lg",  False, True,  False),
@@ -53,6 +57,15 @@ PKGS = [
     ("hstr  (bash history)",            "c",   False, True,  False),
     ("rsync",                           "c",   False, True,  False),
     ("yt-dlp",                          "c",   False, True,  False),
+    ("htop",                            "c",   False, True,  False),
+    ("tree",                            "c",   False, True,  False),
+    ("strace",                          "c",   False, True,  False),
+    ("ShellCheck",                      "c",   False, True,  False),
+    ("duf",                             "c",   False, True,  False),
+    ("ncdu",                            "c",   False, True,  False),
+    ("xclip",                           "c",   False, True,  False),
+    ("pipx",                            "c",   False, True,  False),
+    ("lazygit",                         "lg",  False, True,  False),
     ("bottom  (btm)",                   "lyl", False, True,  False),
     ("Containers",                      None,  None,  None,  False),
     ("Docker  +  Docker Compose",       "lg",  False, True,  False),
@@ -64,12 +77,17 @@ PKGS = [
     ("Tailscale",                       "lyl", False, True,  False),
     ("NetBird",                         "lyl", False, True,  False),
     ("NordVPN",                         "lyl", False, True,  False),
+    ("OpenSSH Server  (sshd)",          "c",   False, True,  False),
+    ("net-tools",                       "c",   False, True,  False),
+    ("WireGuard Tools  (wg)",           "c",   False, True,  False),
     ("Desktop Applications",            None,  None,  None,  False),
     ("Google Chrome",                   "lg",  False, True,  False),
     ("Signal",                          "lg",  False, True,  False),
     ("Claude  (desktop)",               "lg",  False, True,  False),
     ("GNOME Tweaks",                    "c",   False, True,  False),
     ("Solaar",                          "c",   False, True,  False),
+    ("Meld",                            "c",   False, True,  False),
+    ("Peek",                            "c",   False, True,  False),
 ]
 
 # fzf description (cursor package, wrapped to RI-2 = 36 chars per line)
@@ -207,7 +225,7 @@ def build_select():
     lines.append(row(("╭","c"), (label,"inv"), (hbar(W-2-len(label)),"c"), ("╮","c")))
 
     lh = "  Ubuntu Dev Environment Installer"
-    rh = "5/65 selected  "
+    rh = "8/84 selected  "
     lines.append(row(
         ("│","c"), (lh,"cb"),
         (" "*(W-2-len(lh)-len(rh)), ""),
@@ -225,7 +243,7 @@ def build_select():
     lines.append(row(("╰"+hbar(W-2)+"╯","c")))
 
     # Panel top borders
-    pt = " Packages (65 total) "
+    pt = " Packages (84 total) "
     dt = " fzf "
     lines.append(row(
         ("╭","c"),(pt,"cb"),(hbar(LW-2-len(pt)),"c"),("╮","c"),
@@ -272,7 +290,7 @@ def build_select():
 
     # Controls
     bar = "[████░░░░░░░░░░░░░░░░]"
-    ct  = f" {bar} 5/65 packages "
+    ct  = f" {bar} 8/84 packages "
     lines.append(row(("╭","c"),(ct,"gb"),(hbar(W-2-len(ct)),"c"),("╮","c")))
     lines.append(row(
         ("│","c"), ("  ",""),
@@ -322,7 +340,7 @@ def build_confirm():
     lines = []
     IW = W - 2  # inner = 98
 
-    title = " Review Installation  ·  16/65 packages "
+    title = " Review Installation  ·  16/84 packages "
     lines.append(row(("╭","c"),(title,"cb"),(hbar(W-2-len(title)),"c"),("╮","c")))
     lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
