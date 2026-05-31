@@ -20,7 +20,9 @@
 12. [Fonts](#fonts)
 13. [Shell & Terminal Configuration](#shell--terminal-configuration)
 14. [Cursor Editor Extensions](#cursor-editor-extensions)
-15. [Desktop Environments & Window Managers](#desktop-environments--window-managers)
+15. [Claude & AI Tools](#claude--ai-tools)
+16. [GNOME Shell Extensions](#gnome-shell-extensions)
+17. [Desktop Environments & Window Managers](#desktop-environments--window-managers)
 
 ---
 
@@ -55,7 +57,7 @@
 ### snapd
 - **What:** Snap package manager daemon and core runtime
 - **Installed:** Usually pre-installed on Ubuntu Desktop; may be absent on minimal/server installs
-- **Usage:** Required for installing snap packages (Discord, Slack, Spotify, Tailscale, NordVPN, bottom, etc.)
+- **Usage:** Required for installing remaining snap packages (Notion, NordPass, etc.)
 - **Install:** `sudo apt install snapd && sudo snap install core`
 
 ### curl
@@ -94,6 +96,20 @@
 - **Usage:** Frontend development, JavaScript tooling, npm ecosystem
 - **Install:** `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs`
 - **Version Check:** `node --version && npm --version`
+
+### npm
+- **What:** Node package manager, bundled with Node.js; upgraded to latest stable after Node install
+- **Installed:** Yes
+- **Usage:** Install JS dependencies, run scripts, publish packages
+- **Install:** Bundled with Node.js; upgrade with `sudo npm install -g npm@latest`
+- **Version Check:** `npm --version`
+
+### Bun
+- **What:** Fast all-in-one JavaScript runtime, bundler, test runner, and package manager
+- **Installed:** Yes
+- **Usage:** Drop-in Node replacement with faster installs and built-in bundler; `bun run`, `bun install`, `bun test`
+- **Install:** `curl -fsSL https://bun.sh/install | bash`
+- **Version Check:** `bun --version`
 
 ### Rust & Cargo (Recently Added)
 - **What:** Systems programming language, memory-safe without garbage collection
@@ -328,9 +344,9 @@
 
 ### bottom (btm)
 - **What:** Cross-platform TUI system resource monitor
-- **Installed:** Yes (snap)
+- **Installed:** Yes (deb)
 - **Usage:** Monitor CPU per-core, memory, swap, disk I/O, network, and processes in one interactive terminal UI
-- **Install:** `sudo snap install bottom`
+- **Install:** Download the `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom_*_amd64.deb`) and `sudo dpkg -i`
 - **Version Check:** `btm --version`
 - **Usage:** Launch with `btm`; press `?` for help
 
@@ -468,25 +484,25 @@
 
 ### Tailscale
 - **What:** Zero-config WireGuard-based mesh VPN
-- **Installed:** Yes (snap)
+- **Installed:** Yes (APT)
 - **Usage:** Connect devices into a private mesh with stable IPs and automatic NAT traversal; no port forwarding required
-- **Install:** `sudo snap install tailscale`
+- **Install:** Add Tailscale's APT repository, then `sudo apt install tailscale`
 - **Version Check:** `tailscale version`
 - **Setup:** `sudo tailscale up` then authenticate via printed URL
 
 ### NetBird
 - **What:** Open-source WireGuard overlay network with optional self-hosted control plane
-- **Installed:** Yes (snap)
+- **Installed:** Yes (APT)
 - **Usage:** Private peer-to-peer mesh networking with ACLs, DNS routes, and self-hosting option
-- **Install:** `sudo snap install netbird`
+- **Install:** Add NetBird's APT repository, then `sudo apt install netbird`
 - **Version Check:** `netbird version`
 - **Setup:** `sudo netbird up`
 
 ### NordVPN
 - **What:** Commercial VPN client — NordLynx/WireGuard, OpenVPN, IKEv2
-- **Installed:** Yes (snap)
+- **Installed:** Yes (APT)
 - **Usage:** Route traffic through NordVPN servers; includes Threat Protection Lite (DNS ad/tracker blocking) and kill switch
-- **Install:** `sudo snap install nordvpn`
+- **Install:** Install `nordvpn-release`, then `sudo apt install nordvpn`
 - **Version Check:** `nordvpn --version`
 - **Setup:** `nordvpn login` then `nordvpn connect`
 
@@ -537,29 +553,36 @@
 - **What:** Voice, video, and text communication platform
 - **Installed:** Yes
 - **Usage:** Team communication, community interaction
-- **Install:** `snap install discord` or download from https://discord.com/
+- **Install:** Download Discord's vendor `.deb` from https://discord.com/
 - **Usage:** Desktop application
 
 ### Slack
 - **What:** Team messaging and collaboration platform
 - **Installed:** Yes
 - **Usage:** Workplace communication, notifications
-- **Install:** `snap install slack` or download from https://slack.com/
+- **Install:** Download Slack's vendor `.deb` from https://slack.com/
 - **Usage:** Desktop application
 
 ### Spotify
 - **What:** Music streaming service
 - **Installed:** Yes
 - **Usage:** Background music while coding
-- **Install:** `snap install spotify` or download from https://www.spotify.com/
+- **Install:** `sudo apt install spotify-client` (requires Spotify's apt repo: `deb http://repository.spotify.com stable non-free`)
 - **Usage:** Desktop application
 
 ### Notion
 - **What:** All-in-one workspace for notes, databases, documentation
 - **Installed:** Yes
 - **Usage:** Project planning, documentation, knowledge base
-- **Install:** `snap install notion-snap` or use web app at https://www.notion.so
+- **Install:** `snap install notion-desktop` or use web app at https://www.notion.so
 - **Usage:** Desktop app or web browser
+
+### Obsidian
+- **What:** Local-first Markdown knowledge base and note-taking app with a graph view and plugin ecosystem
+- **Installed:** Yes (v1.12.7, at `/opt/Obsidian`)
+- **Usage:** Personal knowledge management, linked notes, daily journaling, second brain
+- **Install:** Download latest `.deb` from https://obsidian.md/ and `sudo dpkg -i obsidian_*.deb`
+- **Version Check:** Obsidian → About
 
 ### NoMachine
 - **What:** High-performance remote desktop solution using the NX protocol
@@ -580,6 +603,89 @@
 - **Installed:** Yes
 - **Usage:** Browse, install, enable/disable, and configure extensions without a browser
 - **Install:** `sudo apt install gnome-shell-extension-manager`
+
+---
+
+## GNOME Shell Extensions
+
+### Ubuntu Dock
+- **What:** Default Ubuntu dock (modified Dash to Dock)
+- **Installed:** Yes (enabled)
+- **UUID:** `ubuntu-dock@ubuntu.com`
+- **Usage:** App launcher and window switcher pinned to the left edge
+- **Install:** Pre-installed with Ubuntu; manage via GNOME Extension Manager
+
+### Ubuntu AppIndicators
+- **What:** Legacy tray icon and app indicator support for the top panel
+- **Installed:** Yes (enabled)
+- **UUID:** `ubuntu-appindicators@ubuntu.com`
+- **Usage:** Surfaces system tray icons (e.g. NordVPN, Solaar, clipboard managers) in the top bar
+- **Install:** Pre-installed with Ubuntu
+
+### Desktop Icons NG (DING)
+- **What:** Adds file/folder icons to the desktop; fork of the original Desktop Icons extension
+- **Installed:** Yes (enabled)
+- **UUID:** `ding@rastersoft.com`
+- **Usage:** Drag files to desktop, right-click context menu, double-click to open
+- **Install:** Pre-installed with Ubuntu
+
+### Just Perfection
+- **What:** Tweak tool to customize GNOME Shell UI, behavior, and visibility of elements
+- **Installed:** Yes (enabled)
+- **UUID:** `just-perfection-desktop@just-perfection`
+- **Usage:** Hide/show top bar, activities button, app menu, clock, and more without editing config files
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/3843/just-perfection/
+
+### OpenWeather
+- **What:** Displays current weather and forecast for any location in the top bar
+- **Installed:** Yes (enabled)
+- **UUID:** `openweather-extension@jenslody.de`
+- **Usage:** Quick weather glance without opening a browser; configurable units and location
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/750/openweather/
+
+### TopHat
+- **What:** Elegant system resource monitor in the GNOME top bar
+- **Installed:** Yes (enabled)
+- **UUID:** `tophat@fflewddur.github.io`
+- **Usage:** Shows live CPU, memory, disk, and network activity at a glance in the panel
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/5219/tophat/
+
+### Freon
+- **What:** Hardware sensor monitor for the top bar (CPU temp, disk temp, GPU temp, fan RPM, voltage)
+- **Installed:** Yes (enabled)
+- **UUID:** `freon@UshakovVasilii_Github.yahoo.com`
+- **Usage:** Monitor thermals without opening a separate app; alerts when temps spike
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/841/freon/
+
+### Net Speed Simplified
+- **What:** Real-time network upload/download speed indicator in the top bar
+- **Installed:** Yes (enabled)
+- **UUID:** `netspeedsimplified@prateekmedia.extension`
+- **Usage:** Instant bandwidth visibility; useful when monitoring large transfers or spotting unexpected traffic
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/3724/net-speed-simplified/
+
+### Audio Selector
+- **What:** Quick audio output and input port switcher in the top bar
+- **Installed:** Yes (enabled)
+- **UUID:** `audio-selector@harald65.simon.gmail.com`
+- **Usage:** Switch between headphones, speakers, and mic without opening Sound Settings
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/5573/audio-selector/
+
+### Bluetooth Quick Connect
+- **What:** Connect/disconnect paired Bluetooth devices directly from the system menu
+- **Installed:** Yes (enabled)
+- **UUID:** `bluetooth-quick-connect@bjarosze.gmail.com`
+- **Usage:** One-click Bluetooth device toggle without opening the full Settings panel
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/1401/bluetooth-quick-connect/
+
+### Simple Message
+- **What:** Displays a custom user-defined message in the top bar
+- **Installed:** Yes (disabled)
+- **UUID:** `simple-message@freddez`
+- **Usage:** Pinned reminder or label text in the panel
+- **Install:** Via GNOME Extension Manager or https://extensions.gnome.org/extension/5670/simple-message/
+
+---
 
 ### GRUB Customizer
 - **What:** GUI for configuring the GRUB2 boot loader
@@ -620,13 +726,6 @@
 - **Usage:** Private messaging, voice/video calls; syncs with Signal mobile app
 - **Install:** Add Signal apt repo, then `sudo apt install signal-desktop`
 - **Version Check:** Signal → Help → About
-
-### Claude (desktop)
-- **What:** Anthropic Claude AI assistant — native desktop application
-- **Installed:** Yes
-- **Usage:** AI assistant with file uploads, artifact rendering, and Projects; apt-managed via community Debian repo
-- **Install:** Add aaddrick.github.io/claude-desktop-debian repo, then `sudo apt install claude-desktop`
-- **Version Check:** Claude → About
 
 ---
 
@@ -690,6 +789,14 @@
 - **Installed:** Yes (default shell at `/bin/bash`)
 - **Usage:** Command execution, scripting, automation
 - **Config:** `~/.bashrc`, `~/.bash_profile`
+
+### rust-analyzer
+- **What:** Official Rust language server (LSP) providing IDE features for any LSP-capable editor
+- **Installed:** Yes
+- **Usage:** Real-time error diagnostics, type inference hints, go-to-definition, auto-completion, rename refactoring, and code actions in Cursor, VS Code, Neovim, etc.
+- **Install:** `rustup component add rust-analyzer`
+- **Version Check:** `rust-analyzer --version`
+- **Notes:** Installed as a rustup component so it stays in sync with your active toolchain. Available at `~/.cargo/bin/rust-analyzer` after install; picked up automatically by most editors.
 
 ### Starship
 - **What:** Minimal, fast shell prompt written in Rust
@@ -818,6 +925,92 @@
 - **What:** Color-code indentation levels
 - **Usage:** Visualize code structure better
 - **Install:** Via Cursor Extensions marketplace
+
+---
+
+## Claude & AI Tools
+
+### Claude Desktop
+- **What:** Anthropic Claude AI assistant — native desktop application
+- **Installed:** Yes (`claude-desktop` v1.9255.2)
+- **Usage:** AI assistant with file uploads, artifact rendering, Projects, and MCP integrations; apt-managed via community Debian repo
+- **Install:** Add aaddrick.github.io/claude-desktop-debian repo, then `sudo apt install claude-desktop`
+- **Version Check:** Claude → About
+
+### Claude Code (CLI)
+- **What:** Anthropic's official agentic CLI for Claude — runs in the terminal and operates directly on your codebase
+- **Installed:** Yes (v2.1.158, at `~/.local/bin/claude`)
+- **Usage:** Code generation, refactoring, debugging, repo exploration, and multi-step agentic tasks from the terminal
+- **Install:** `npm install -g @anthropic-ai/claude-code`
+- **Version Check:** `claude --version`
+
+### Claude in Chrome (Extension)
+- **What:** Claude browser extension — surfaces Claude inside Chrome for in-browser assistance
+- **Installed:** Yes (v1.0.74, paired to this machine as "legion")
+- **Usage:** AI assistance while browsing; integrates with Claude Desktop for shared context
+- **Install:** Manual — install from Chrome Web Store (search "Claude") and pair via Claude Desktop settings
+- **Note:** Pairing is done through Claude Desktop preferences; cannot be automated via CLI
+
+### Compound Engineering Plugin (CE)
+- **What:** AI-powered development skills plugin for Claude Code — adds slash commands for code review, planning, debugging, commits, PRs, and more
+- **Installed:** Yes (v3.8.4 at `~/.claude/plugins/`)
+- **Usage:** Invoked as `/ce-*` slash commands inside Claude Code sessions (e.g. `/ce-code-review`, `/ce-commit`, `/ce-plan`, `/ce-debug`)
+- **Install:** Manual — install from within Claude Code or Claude Desktop plugin marketplace; cannot be automated via CLI
+- **Key Skills:** `ce-code-review`, `ce-commit`, `ce-commit-push-pr`, `ce-plan`, `ce-debug`, `ce-brainstorm`, `ce-ideate`, `ce-work`, `ce-sessions`, `ce-worktree`, `ce-doc-review`, `ce-frontend-design`, `ce-simplify-code`, `ce-compound`, and more
+
+---
+
+### MCP Servers
+
+### jcodemunch-mcp
+- **What:** Token-efficient MCP server for source code exploration via tree-sitter AST parsing
+- **Installed:** Yes (v1.108.27 via pip; run via `uvx` from Claude Code)
+- **Usage:** Lets Claude Code parse and navigate codebases at the AST level without reading full file contents — reduces token usage on large repos
+- **Config:** `~/.claude/settings.json` → `mcpServers.jcodemunch`
+- **Install:** `pip install jcodemunch-mcp` (or let uvx fetch it automatically), then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
+  ```json
+  "jcodemunch": {
+    "command": "uvx",
+    "args": ["--from", "git+https://github.com/jgravelle/jcodemunch-mcp.git", "jcodemunch-mcp"]
+  }
+  ```
+
+### memory (local MCP)
+- **What:** Local persistent memory MCP server — gives Claude Desktop a read/write key-value store that persists across sessions
+- **Installed:** Yes (custom Python script at `~/repos/memory-mcp/memory_mcp.py`)
+- **Usage:** Claude Desktop can store and recall facts, preferences, and context across conversations without relying on cloud memory
+- **Config:** `~/.config/Claude/claude_desktop_config.json` → `mcpServers.memory`
+- **Install:** Clone/copy `memory_mcp.py`, install `mcp` Python package (`pip install mcp`), then add to Claude Desktop config:
+  ```json
+  "memory": {
+    "command": "/usr/bin/python3",
+    "args": ["/home/mythos/repos/memory-mcp/memory_mcp.py"]
+  }
+  ```
+
+---
+
+### Cloud MCP Integrations (configured via claude.ai — no local install)
+
+### Gmail MCP
+- **What:** MCP integration giving Claude access to Gmail — search threads, read messages, create drafts, manage labels
+- **Installed:** Yes (cloud, via claude.ai integrations)
+- **Install:** Manual — enable in Claude Desktop or claude.ai settings under Integrations; requires Google account authorization
+
+### Google Calendar MCP
+- **What:** MCP integration giving Claude access to Google Calendar — list/create/update/delete events, suggest times, respond to invites
+- **Installed:** Yes (cloud, via claude.ai integrations)
+- **Install:** Manual — enable in Claude Desktop or claude.ai settings under Integrations
+
+### Google Drive MCP
+- **What:** MCP integration giving Claude access to Google Drive — browse, read, and manage files
+- **Installed:** Yes (cloud, via claude.ai integrations)
+- **Install:** Manual — enable in Claude Desktop or claude.ai settings under Integrations
+
+### Notion MCP
+- **What:** MCP integration giving Claude access to Notion — search pages, query databases, create and update pages and comments
+- **Installed:** Yes (cloud, via claude.ai integrations)
+- **Install:** Manual — enable in Claude Desktop or claude.ai settings under Integrations
 
 ---
 

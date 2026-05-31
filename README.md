@@ -1,6 +1,6 @@
 # linux-warez-list
 
-> Complete Ubuntu dev environment — 84 packages across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
+> Complete Ubuntu dev environment — 108 packages, extensions, and tools across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
 
 ---
 
@@ -20,7 +20,7 @@ sudo bash install-all.sh
 
 ## Interactive Installer
 
-A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 84 packages by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 108 packages, extensions, and tools by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
 
 ### Package selection
 
@@ -77,7 +77,9 @@ Package rows are colour-coded by install method:
 | Package | Method |
 |---------|--------|
 | Python 3.10 + pip + venv | apt |
-| Node.js 20 + npm | script |
+| Node.js 20 | script |
+| npm (latest) | script |
+| Bun | script |
 | Rust (via rustup) | script |
 | GCC + G++ + GDB | apt |
 | Clang + LLVM | apt |
@@ -112,7 +114,7 @@ Package rows are colour-coded by install method:
 | xclip | apt |
 | pipx | apt |
 | lazygit | script |
-| bottom (btm) | snap |
+| bottom (btm) | script |
 
 ### Containers
 | Package | Method |
@@ -126,9 +128,9 @@ Package rows are colour-coded by install method:
 | netcat (nc) | apt |
 | aircrack-ng | apt |
 | wifite + hcxtools | apt |
-| Tailscale | snap |
-| NetBird | snap |
-| NordVPN | snap |
+| Tailscale | script |
+| NetBird | script |
+| NordVPN | script |
 | OpenSSH Server (sshd) | apt |
 | net-tools | apt |
 | WireGuard Tools (wg) | apt |
@@ -145,6 +147,7 @@ Package rows are colour-coded by install method:
 |---------|--------|
 | Starship (shell prompt) | cargo |
 | Just (task runner) | cargo |
+| rust-analyzer (LSP) | rustup component |
 
 ### Python Packages
 | Package | Method |
@@ -164,18 +167,48 @@ Package rows are colour-coded by install method:
 | fonts-dejavu | apt |
 | FiraCode Nerd Font | script |
 
+### Claude & AI Tools
+| Tool | Method |
+|------|--------|
+| Claude Desktop | apt |
+| Claude Code (CLI) | npm |
+| Claude in Chrome (extension) | manual |
+| Compound Engineering Plugin | manual |
+| jcodemunch-mcp (MCP server) | pip/uvx |
+| memory MCP (local server) | script |
+| Gmail MCP | cloud |
+| Google Calendar MCP | cloud |
+| Google Drive MCP | cloud |
+| Notion MCP | cloud |
+
+### GNOME Shell Extensions
+| Extension | Status |
+|-----------|--------|
+| Ubuntu Dock | enabled |
+| Ubuntu AppIndicators | enabled |
+| Desktop Icons NG (DING) | enabled |
+| Just Perfection | enabled |
+| OpenWeather | enabled |
+| TopHat | enabled |
+| Freon | enabled |
+| Net Speed Simplified | enabled |
+| Audio Selector | enabled |
+| Bluetooth Quick Connect | enabled |
+| Simple Message | disabled |
+
 ### Snap Applications
 | Package | Method |
 |---------|--------|
-| Discord | snap |
-| Slack | snap |
-| Spotify | snap |
 | Notion | snap |
 | NordPass | snap |
 
 ### Desktop Applications
 | Package | Method |
 |---------|--------|
+| Spotify | apt |
+| Obsidian | script |
+| Discord | script |
+| Slack | script |
 | SimpleScreenRecorder | apt |
 | VeraCrypt | apt |
 | NoMachine | script |
@@ -254,4 +287,4 @@ sudo snap refresh
 
 ---
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-05-30

@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
-use std::{io, process::Command};
+use std::{collections::HashSet, io, process::Command};
 extern crate libc;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +32,8 @@ struct Package {
     cmd: InstallCmd,
     selected: bool,
     requires_root: bool,
+    requires_pkg: Option<&'static str>,
+    installed: bool,
 }
 
 enum Entry {
@@ -59,7 +61,8 @@ struct App {
 
 impl App {
     fn new() -> Self {
-        let (packages, entries) = build_data();
+        let (mut packages, entries) = build_data();
+        check_all_installed(&mut packages);
         let cursor = entries
             .iter()
             .position(|e| matches!(e, Entry::Pkg(_)))
@@ -84,19 +87,50 @@ impl App {
         }
     }
 
+    fn dep_satisfied(&self, dep: &str) -> bool {
+        self.packages
+            .iter()
+            .any(|p| p.name == dep && (p.installed || p.selected))
+    }
+
     fn toggle(&mut self) {
         if let Some(i) = self.current_pkg_idx() {
-            let locked = !self.is_root && self.packages[i].requires_root;
-            if !locked {
+            let root_locked = !self.is_root && self.packages[i].requires_root;
+            let dep_locked = self.packages[i]
+                .requires_pkg
+                .map_or(false, |dep| !self.dep_satisfied(dep));
+            if !root_locked && !dep_locked && !self.packages[i].installed {
                 self.packages[i].selected = !self.packages[i].selected;
+                // Cascade-deselect any packages that depend on this one
+                if !self.packages[i].selected {
+                    let name = self.packages[i].name;
+                    for p in &mut self.packages {
+                        if p.requires_pkg == Some(name) {
+                            p.selected = false;
+                        }
+                    }
+                }
             }
         }
     }
 
     fn select_all(&mut self) {
-        for p in &mut self.packages {
-            if self.is_root || !p.requires_root {
-                p.selected = true;
+        // Iterate by index so we can read self.packages for dep checks while also writing.
+        // Extension Manager appears before the gnome-ext entries, so when we reach each
+        // extension, Extension Manager will already be selected — dep check passes naturally.
+        for i in 0..self.packages.len() {
+            if self.packages[i].installed {
+                continue;
+            }
+            if !self.is_root && self.packages[i].requires_root {
+                continue;
+            }
+            let dep_ok = match self.packages[i].requires_pkg {
+                None => true,
+                Some(dep) => self.packages.iter().any(|p| p.name == dep && (p.installed || p.selected)),
+            };
+            if dep_ok {
+                self.packages[i].selected = true;
             }
         }
     }
@@ -152,15 +186,14 @@ impl App {
     }
 
     fn rust_will_be_installed(&self) -> bool {
-        self.packages.iter().any(|p| {
-            p.selected && matches!(&p.cmd, InstallCmd::Script(s) if s.contains("rustup"))
-        })
+        self.packages
+            .iter()
+            .any(|p| p.selected && matches!(&p.cmd, InstallCmd::Script(s) if s.contains("rustup")))
     }
 
     fn python_will_be_installed(&self) -> bool {
         self.packages.iter().any(|p| {
-            p.selected
-                && matches!(&p.cmd, InstallCmd::Apt(pkgs) if pkgs.contains(&"python3.10"))
+            p.selected && matches!(&p.cmd, InstallCmd::Apt(pkgs) if pkgs.contains(&"python3.10"))
         })
     }
 }
@@ -200,8 +233,17 @@ impl DataBuilder {
             cmd,
             selected,
             requires_root,
+            requires_pkg: None,
+            installed: false,
         });
         self.entries.push(Entry::Pkg(idx));
+        self
+    }
+
+    fn dep(&mut self, pkg_name: &'static str) -> &mut Self {
+        if let Some(p) = self.packages.last_mut() {
+            p.requires_pkg = Some(pkg_name);
+        }
         self
     }
 
@@ -277,14 +319,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
 
     b.pkg(
         "snapd",
-        "Snap package manager daemon. Required for installing snap packages (Discord, \
-         Slack, Spotify, Tailscale, NordVPN, bottom, etc.). Usually pre-installed on \
+        "Snap package manager daemon. Required for installing remaining snap packages \
+         (Spotify, Notion, NordPass, bottom, etc.). Usually pre-installed on \
          Ubuntu desktop but may be absent on minimal or server installs. If snap commands \
          fail with 'command not found', install this first. Also installs the snap core \
          runtime.",
-        InstallCmd::Script(
-            "apt install -y snapd && snap install core",
-        ),
+        InstallCmd::Script("apt install -y snapd && snap install core"),
         false,
         true,
     );
@@ -333,7 +373,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          Python is the go-to language for scripting, automation, data science, machine learning, \
          and web backends (Flask, FastAPI, Django). venv lets you create isolated per-project \
          environments so package versions never conflict.",
-        InstallCmd::Apt(&["python3.10", "python3.10-venv", "python3.10-dev", "python3-pip"]),
+        InstallCmd::Apt(&[
+            "python3.10",
+            "python3.10-venv",
+            "python3.10-dev",
+            "python3-pip",
+        ]),
         false,
         true,
     );
@@ -350,6 +395,31 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         ),
         false,
         true,
+    );
+
+    b.pkg(
+        "npm  (latest)",
+        "Node package manager — bundled with Node.js but upgraded here to the latest stable \
+         release. Keeps the package manager current independently of the Node.js LTS cadence. \
+         Manages JavaScript dependencies, runs package scripts, and publishes packages.",
+        InstallCmd::Script("npm install -g npm@latest"),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Bun",
+        "Fast all-in-one JavaScript runtime, bundler, test runner, and package manager. \
+         Drop-in replacement for Node in most contexts with significantly faster installs \
+         and a built-in bundler. Use `bun run`, `bun install`, and `bun test` as direct \
+         substitutes for the npm/node equivalents. Installed into the invoking user's home.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && sudo -u \"$REAL_USER\" bash -c \
+             'curl -fsSL https://bun.sh/install | bash'",
+        ),
+        false,
+        false,
     );
 
     b.pkg(
@@ -732,8 +802,15 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          CPU usage per core, memory, swap, disk I/O, network traffic, and a filterable \
          process list — all in one interactive TUI with scrollable graphs. Supports \
          zooming, process killing, and multiple layout presets. A modern, more readable \
-         replacement for top and htop. Launch with `btm`. Installed via snap.",
-        InstallCmd::Snap("bottom"),
+         replacement for top and htop. Launch with `btm`.",
+        InstallCmd::Script(
+            "BTM_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest \
+             | grep browser_download_url | grep 'bottom_.*_amd64\\.deb' | grep -v musl | head -1 \
+             | cut -d'\"' -f4) \
+             && curl -Lo /tmp/bottom.deb \"$BTM_URL\" \
+             && dpkg -i /tmp/bottom.deb \
+             && rm -f /tmp/bottom.deb",
+        ),
         false,
         true,
     );
@@ -815,8 +892,17 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          IP reachable from anywhere with automatic NAT traversal — no port forwarding \
          or static IPs required. Free tier covers 100 devices. Supports Magic DNS for \
          hostname routing, subnet routing, exit nodes, and granular ACLs. After install, \
-         run `sudo tailscale up` and authenticate via the printed URL. Via snap.",
-        InstallCmd::Snap("tailscale"),
+         run `sudo tailscale up` and authenticate via the printed URL. Installed from \
+         Tailscale's official APT repository.",
+        InstallCmd::Script(
+            ". /etc/os-release \
+             && curl -fsSL \"https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME:-jammy}.noarmor.gpg\" \
+             | tee /usr/share/keyrings/tailscale-archive-keyring.gpg > /dev/null \
+             && curl -fsSL \"https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME:-jammy}.tailscale-keyring.list\" \
+             | tee /etc/apt/sources.list.d/tailscale.list > /dev/null \
+             && apt update && apt install -y tailscale \
+             && (snap list tailscale >/dev/null 2>&1 && snap remove tailscale || true)",
+        ),
         false,
         true,
     );
@@ -827,8 +913,17 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          NAT traversal, and an optional self-hosted control plane. Connect machines into \
          a private mesh network with ACLs, DNS routes, and network policies. Good choice \
          when you want the flexibility of a managed VPN but with self-hosting as an \
-         option. After install: `sudo netbird up`. Installed via snap.",
-        InstallCmd::Snap("netbird"),
+         option. After install: `sudo netbird up`. Installed from NetBird's official \
+         APT repository.",
+        InstallCmd::Script(
+            "mkdir -p /etc/apt/keyrings \
+             && curl -fsSL https://pkgs.netbird.io/debian/public.key \
+             | gpg --dearmor --yes -o /etc/apt/keyrings/netbird.gpg \
+             && echo \"deb [signed-by=/etc/apt/keyrings/netbird.gpg] https://pkgs.netbird.io/debian stable main\" \
+             | tee /etc/apt/sources.list.d/netbird.list > /dev/null \
+             && apt update && apt install -y netbird \
+             && (snap list netbird >/dev/null 2>&1 && snap remove netbird || true)",
+        ),
         false,
         true,
     );
@@ -839,8 +934,17 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          (WireGuard-based), OpenVPN, or IKEv2. Includes Threat Protection Lite for \
          DNS-level ad and tracker blocking, an automatic kill switch, and split \
          tunneling. After install: `nordvpn login` then `nordvpn connect`. \
-         Requires a NordVPN subscription. Installed via snap.",
-        InstallCmd::Snap("nordvpn"),
+         Requires a NordVPN subscription. Installed from NordVPN's official APT \
+         repository.",
+        InstallCmd::Script(
+            "curl -fL https://repo.nordvpn.com/deb/nordvpn/debian/pool/main/n/nordvpn-release/nordvpn-release_1.0.0_all.deb \
+             -o /tmp/nordvpn-release.deb \
+             && apt install -y /tmp/nordvpn-release.deb \
+             && apt update \
+             && (snap list nordvpn >/dev/null 2>&1 && snap remove nordvpn || true) \
+             && apt install -y nordvpn \
+             && rm -f /tmp/nordvpn-release.deb",
+        ),
         false,
         true,
     );
@@ -943,6 +1047,25 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         false,
     );
+
+    b.pkg(
+        "rust-analyzer  (LSP)",
+        "Official Rust language server — the backbone of IDE support for Rust in Cursor, \
+         VS Code, Neovim, and any LSP-capable editor. Provides real-time inline error \
+         diagnostics, type inference hints, go-to-definition, auto-completion, rename \
+         refactoring, and code actions without leaving your editor. Installed as a rustup \
+         component so it stays in sync with your active toolchain. After install it is \
+         available at ~/.cargo/bin/rust-analyzer and picked up automatically by most editors. \
+         Requires Rust (rustup) — install above first if needed.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && REAL_HOME=$(getent passwd \"${REAL_USER}\" | cut -d: -f6) \
+             && sudo -u \"${REAL_USER}\" \"${REAL_HOME}/.cargo/bin/rustup\" component add rust-analyzer",
+        ),
+        false,
+        false,
+    );
+    b.dep("Rust  (via rustup)");
 
     // ── Python Packages ───────────────────────────────────────────────────────
     b.cat("  Python Packages  (pip required)");
@@ -1081,31 +1204,19 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     b.cat("  Snap Applications  (snapd required)");
 
     b.pkg(
-        "Discord  (snap)",
-        "Voice, video, and text communication platform. Widely used by developer communities, \
-         open source projects, and teams. Supports screen share, rich presence, bots, webhooks, \
-         and role-based channel permissions. Installed via snap.",
-        InstallCmd::Snap("discord"),
-        false,
-        true,
-    );
-
-    b.pkg(
-        "Slack  (snap)",
-        "Team messaging and collaboration platform. Organized into channels by topic with \
-         direct messaging, file sharing, video/audio huddles, and integrations with GitHub, \
-         Jira, PagerDuty, Google Calendar, and other dev tools. Installed via snap.",
-        InstallCmd::Snap("slack"),
-        false,
-        true,
-    );
-
-    b.pkg(
-        "Spotify  (snap)",
+        "Spotify",
         "Music streaming service with a catalog of 100M+ tracks. Great for background music \
          during long coding sessions. The desktop app supports media key controls \
-         (play/pause, next/prev) and system notifications. Installed via snap.",
-        InstallCmd::Snap("spotify"),
+         (play/pause, next/prev) and system notifications. Installed from Spotify's \
+         official apt repository.",
+        InstallCmd::Script(
+            "curl -sS https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg \
+             | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+             && echo 'deb http://repository.spotify.com stable non-free' \
+             > /etc/apt/sources.list.d/spotify.list \
+             && apt update \
+             && apt install -y spotify-client",
+        ),
         false,
         true,
     );
@@ -1114,8 +1225,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Notion  (snap)",
         "All-in-one workspace for notes, documentation, databases, kanban boards, and project \
          management. Great for personal knowledge bases, team wikis, and meeting notes. \
-         Embed code blocks, tables, calendars, and more. Installed via snap as notion-snap.",
-        InstallCmd::Snap("notion-snap"),
+         Embed code blocks, tables, calendars, and more. Installed via snap as \
+         notion-desktop.",
+        InstallCmd::Snap("notion-desktop"),
         false,
         true,
     );
@@ -1130,8 +1242,229 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    // ── GNOME Shell Extensions ────────────────────────────────────────────────
+    b.cat("  GNOME Shell Extensions");
+
+    b.pkg(
+        "GNOME Shell Extension Manager",
+        "Native GUI for discovering, installing, enabling, and configuring GNOME Shell \
+         extensions without a browser or the extensions.gnome.org web UI. Browse the \
+         full extensions catalog, toggle extensions on/off, access per-extension \
+         settings, and check for updates — all from a clean desktop app. Required to \
+         install the extensions listed below.",
+        InstallCmd::Apt(&["gnome-shell-extension-manager"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Ubuntu Dock  (gnome-ext)",
+        "The default Ubuntu dock — a modified Dash to Dock pinned to the left edge. \
+         Provides a persistent app launcher and running-window switcher. Pre-installed \
+         on Ubuntu Desktop; this entry enables it if it has been disabled.",
+        InstallCmd::Script("gnome-extensions enable ubuntu-dock@ubuntu.com"),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Ubuntu AppIndicators  (gnome-ext)",
+        "Restores legacy system-tray / app-indicator support in the GNOME top bar. \
+         Required for tray icons from apps like NordVPN, Solaar, clipboard managers, \
+         and many background utilities. Pre-installed on Ubuntu Desktop.",
+        InstallCmd::Script("gnome-extensions enable ubuntu-appindicators@ubuntu.com"),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Desktop Icons NG (DING)  (gnome-ext)",
+        "Adds file and folder icons to the desktop. Fork of the original Desktop Icons \
+         extension with several improvements: drag-and-drop, right-click context menu, \
+         double-click to open, and support for stacking icons. Pre-installed on Ubuntu.",
+        InstallCmd::Script("gnome-extensions enable ding@rastersoft.com"),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Just Perfection  (gnome-ext)",
+        "Comprehensive GNOME Shell tweak tool. Hide or reposition the top bar, activities \
+         button, app menu, clock, search, workspace switcher, and more — without editing \
+         config files. Useful for creating a minimal, distraction-free desktop layout.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             just-perfection-desktop@just-perfection",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "OpenWeather  (gnome-ext)",
+        "Shows current weather conditions and a short forecast for any location directly \
+         in the GNOME top bar. Supports multiple weather providers, configurable units \
+         (°C/°F), and click-to-expand detail view. Good for a quick glance without \
+         opening a browser.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             openweather-extension@jenslody.de",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "TopHat  (gnome-ext)",
+        "Elegant system resource monitor in the GNOME top bar. Displays live CPU, memory, \
+         disk, and network activity without opening a separate app. Unobtrusive by default \
+         with a compact sparkline graph that expands on click.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             tophat@fflewddur.github.io",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Freon  (gnome-ext)",
+        "Hardware sensor monitor in the top bar. Shows CPU temperature, disk temperature, \
+         GPU temperature (NVIDIA/AMD), fan RPM, and voltages from lm-sensors. Useful for \
+         keeping an eye on thermals during compiles or heavy workloads without leaving \
+         the desktop.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             freon@UshakovVasilii_Github.yahoo.com",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Net Speed Simplified  (gnome-ext)",
+        "Real-time upload and download speed indicator in the GNOME top bar. Helps spot \
+         unexpected background network activity, monitor large transfers, or confirm that \
+         a VPN tunnel is carrying traffic. Highly configurable display format.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             netspeedsimplified@prateekmedia.extension",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Audio Selector  (gnome-ext)",
+        "Adds a quick audio output and input port switcher to the GNOME top bar. Switch \
+         between headphones, speakers, and microphone sources with a single click — no \
+         need to open Sound Settings. Saves several clicks when toggling between devices.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             audio-selector@harald65.simon.gmail.com",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Bluetooth Quick Connect  (gnome-ext)",
+        "Lets you connect and disconnect paired Bluetooth devices directly from the \
+         GNOME system menu — no need to open Bluetooth Settings. Shows battery level \
+         for supported devices. Essential if you regularly switch between multiple \
+         Bluetooth headsets or peripherals.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             bluetooth-quick-connect@bjarosze.gmail.com",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
+    b.pkg(
+        "Simple Message  (gnome-ext)",
+        "Displays a short user-defined message string in the GNOME top bar. Useful as a \
+         pinned reminder, a label for which machine/environment this is, or a motivational \
+         note. Currently disabled — enable and configure via GNOME Extension Manager.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
+             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             simple-message@freddez",
+        ),
+        false,
+        false,
+    );
+    b.dep("GNOME Shell Extension Manager");
+
     // ── Desktop Applications ──────────────────────────────────────────────────
     b.cat("  Desktop Applications");
+
+    b.pkg(
+        "Discord",
+        "Voice, video, and text communication platform. Widely used by developer communities, \
+         open source projects, and teams. Supports screen share, rich presence, bots, webhooks, \
+         and role-based channel permissions. Installed from Discord's vendor .deb package; \
+         the installer disables Discord's incompatible AppArmor profile on Ubuntu 22.04 \
+         systems that lack AppArmor abi/4.0.",
+        InstallCmd::Script(
+            "curl -fL 'https://discord.com/api/download?platform=linux&format=deb' \
+             -o /tmp/discord.deb \
+             && apt install -y /tmp/discord.deb \
+             && if [ -f /etc/apparmor.d/discord ] && [ ! -e /etc/apparmor.d/abi/4.0 ]; then \
+                  ln -sf /etc/apparmor.d/discord /etc/apparmor.d/disable/discord; \
+                  apparmor_parser -R /etc/apparmor.d/discord >/dev/null 2>&1 || true; \
+                  systemctl reload apparmor >/dev/null 2>&1 || true; \
+                fi \
+             && (snap list discord >/dev/null 2>&1 && snap remove discord || true) \
+             && rm -f /tmp/discord.deb",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Slack",
+        "Team messaging and collaboration platform. Organized into channels by topic with \
+         direct messaging, file sharing, video/audio huddles, and integrations with GitHub, \
+         Jira, PagerDuty, Google Calendar, and other dev tools. Installed from Slack's \
+         vendor .deb package so desktop integration and URL handlers are not constrained \
+         by snap confinement.",
+        InstallCmd::Script(
+            "curl -fL \
+             https://downloads.slack-edge.com/desktop-releases/linux/x64/4.49.89/slack-desktop-4.49.89-amd64.deb \
+             -o /tmp/slack.deb \
+             && apt install -y /tmp/slack.deb \
+             && (snap list slack >/dev/null 2>&1 && snap remove slack || true) \
+             && rm -f /tmp/slack.deb",
+        ),
+        false,
+        true,
+    );
 
     b.pkg(
         "SimpleScreenRecorder",
@@ -1189,17 +1522,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
-    b.pkg(
-        "GNOME Shell Extension Manager",
-        "Native GUI for discovering, installing, enabling, and configuring GNOME Shell \
-         extensions without a browser or the extensions.gnome.org web UI. Browse the \
-         full extensions catalog, toggle extensions on/off, access per-extension \
-         settings, and check for updates — all from a clean desktop app. Replaces the \
-         cumbersome browser-extension workflow.",
-        InstallCmd::Apt(&["gnome-shell-extension-manager"]),
-        false,
-        true,
-    );
 
     b.pkg(
         "GRUB Customizer",
@@ -1293,6 +1615,23 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
+        "Obsidian",
+        "Local-first Markdown knowledge base with a graph view and a rich plugin ecosystem. \
+         Stores all notes as plain Markdown files on disk — no proprietary format, no cloud \
+         lock-in. Excellent for personal knowledge management, linked notes, daily journaling, \
+         and building a second brain. Installed from the official GitHub releases .deb.",
+        InstallCmd::Script(
+            "OBS_URL=$(curl -s https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest \
+             | grep browser_download_url | grep '\\.deb' | grep -v arm | head -1 | cut -d'\"' -f4) \
+             && curl -Lo /tmp/obsidian.deb \"$OBS_URL\" \
+             && apt install -y /tmp/obsidian.deb \
+             && rm -f /tmp/obsidian.deb",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
         "Claude  (desktop)",
         "Anthropic's Claude AI assistant as a native desktop application. Full-featured \
          interface with conversation history, file uploads, artifact rendering, and \
@@ -1314,6 +1653,53 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    // ── Claude & AI Tools ─────────────────────────────────────────────────────
+    b.cat("  Claude & AI Tools");
+
+    b.pkg(
+        "Claude Code  (CLI)",
+        "Anthropic's official agentic CLI for Claude. Runs in the terminal and operates \
+         directly on your codebase — generate, edit, refactor, debug, and explore code \
+         with full file-system access. Supports slash commands, MCP servers, hooks, and \
+         multi-step autonomous tasks. Installed as a global npm package; requires Node.js.",
+        InstallCmd::Script("npm install -g @anthropic-ai/claude-code"),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "jcodemunch-mcp",
+        "Token-efficient MCP server for source code exploration via tree-sitter AST parsing. \
+         Lets Claude Code navigate and understand codebases at the AST level without reading \
+         full file contents, significantly reducing token usage on large repos. Run via uvx \
+         and configured in ~/.claude/settings.json. After install: (1) run `jcodemunch-mcp init` \
+         in your project root to initialize it, (2) add to mcpServers in ~/.claude/settings.json \
+         with command 'uvx' and args \
+         ['--from', 'git+https://github.com/jgravelle/jcodemunch-mcp.git', 'jcodemunch-mcp'].",
+        InstallCmd::Script("pip3 install jcodemunch-mcp"),
+        false,
+        false,
+    );
+
+    b.pkg(
+        "memory-mcp  (local)",
+        "Local persistent memory MCP server for Claude Desktop. Gives Claude a read/write \
+         key-value store that persists across sessions — store facts, preferences, and \
+         context without relying on cloud memory. Runs as a Python script via the MCP \
+         library. After install, add to mcpServers in ~/.config/Claude/claude_desktop_config.json \
+         with command '/usr/bin/python3' pointing to ~/repos/memory-mcp/memory_mcp.py.",
+        InstallCmd::Script(
+            "pip3 install mcp \
+             && REAL_HOME=$(eval echo ~\"${SUDO_USER:-$USER}\") \
+             && mkdir -p \"$REAL_HOME/repos/memory-mcp\" \
+             && curl -fsSL https://raw.githubusercontent.com/dylansparks/memory-mcp/main/memory_mcp.py \
+             -o \"$REAL_HOME/repos/memory-mcp/memory_mcp.py\" 2>/dev/null \
+             || echo 'memory_mcp.py must be placed manually at ~/repos/memory-mcp/memory_mcp.py'",
+        ),
+        false,
+        false,
+    );
+
     b.build()
 }
 
@@ -1325,7 +1711,8 @@ fn cmd_short(cmd: &InstallCmd) -> String {
         InstallCmd::Script(s) => {
             let first = s.lines().next().unwrap_or("").trim();
             if first.len() > 62 {
-                format!("{}...", &first[..59])
+                let truncated: String = first.chars().take(59).collect();
+                format!("{}...", truncated)
             } else {
                 first.to_string()
             }
@@ -1339,11 +1726,11 @@ fn cmd_short(cmd: &InstallCmd) -> String {
 /// Returns (dot glyph, badge label, accent color) per install type.
 fn type_meta(cmd: &InstallCmd) -> (&'static str, &'static str, Color) {
     match cmd {
-        InstallCmd::Apt(_)    => ("●", "apt",   Color::Cyan),
-        InstallCmd::Script(_) => ("●", "sh",    Color::LightGreen),
-        InstallCmd::Cargo(_)  => ("●", "cargo", Color::LightMagenta),
-        InstallCmd::Pip(_)    => ("●", "pip",   Color::LightBlue),
-        InstallCmd::Snap(_)   => ("●", "snap",  Color::Yellow),
+        InstallCmd::Apt(_) => ("●", "apt", Color::Cyan),
+        InstallCmd::Script(_) => ("●", "sh", Color::LightGreen),
+        InstallCmd::Cargo(_) => ("●", "cargo", Color::LightMagenta),
+        InstallCmd::Pip(_) => ("●", "pip", Color::LightBlue),
+        InstallCmd::Snap(_) => ("●", "snap", Color::Yellow),
     }
 }
 
@@ -1358,13 +1745,13 @@ fn progress_bar(selected: usize, total: usize, bar_w: usize) -> String {
 // ─── UI Rendering ─────────────────────────────────────────────────────────────
 
 // Palette shortcuts — keep styling consistent across all render fns.
-const C_BORDER:  Color = Color::Cyan;
-const C_CURSOR:  Color = Color::Rgb(22, 52, 95);   // dark navy row bg
-const C_CAT:     Color = Color::Yellow;
-const C_DIM:     Color = Color::Rgb(90, 90, 110);  // muted separator / meta
-const C_ROOT:    Color = Color::LightRed;
-const C_OK:      Color = Color::LightGreen;
-const C_WARN:    Color = Color::Yellow;
+const C_BORDER: Color = Color::Cyan;
+const C_CURSOR: Color = Color::Rgb(22, 52, 95); // dark navy row bg
+const C_CAT: Color = Color::Yellow;
+const C_DIM: Color = Color::Rgb(90, 90, 110); // muted separator / meta
+const C_ROOT: Color = Color::LightRed;
+const C_OK: Color = Color::LightGreen;
+const C_WARN: Color = Color::Yellow;
 
 fn render(f: &mut Frame, app: &mut App) {
     // Solid dark canvas behind everything
@@ -1373,7 +1760,7 @@ fn render(f: &mut Frame, app: &mut App) {
         f.area(),
     );
     match app.screen {
-        Screen::Select  => render_select(f, app),
+        Screen::Select => render_select(f, app),
         Screen::Confirm => render_confirm(f, app),
     }
 }
@@ -1407,16 +1794,21 @@ fn render_select(f: &mut Frame, app: &mut App) {
 
 fn render_title(f: &mut Frame, app: &App, area: Rect) {
     let inner_w = area.width.saturating_sub(2) as usize;
-    let total    = app.packages.len();
+    let total = app.packages.len();
     let selected = app.selected_count();
 
     // Line 1 – app name left-justified, selection count right-justified
-    let left  = "  Ubuntu Dev Environment Installer";
+    let left = "  Ubuntu Dev Environment Installer";
     let right = format!("{}/{} selected  ", selected, total);
-    let gap   = inner_w.saturating_sub(left.len() + right.len());
+    let gap = inner_w.saturating_sub(left.len() + right.len());
 
     let line1 = Line::from(vec![
-        Span::styled(left,  Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            left,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" ".repeat(gap)),
         Span::styled(
             right,
@@ -1429,19 +1821,35 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
     ]);
 
     // Line 2 – inline keybind cheat-sheet
-    let k = |s: &'static str| Span::styled(s, Style::default().fg(C_WARN).add_modifier(Modifier::BOLD));
+    let k =
+        |s: &'static str| Span::styled(s, Style::default().fg(C_WARN).add_modifier(Modifier::BOLD));
     let d = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
     let dot = Span::styled("  ·  ", Style::default().fg(C_DIM));
 
     let line2 = Line::from(vec![
         Span::raw("  "),
-        k("↑↓"), d(" navigate"), dot.clone(),
-        k("Space"), d(" toggle"), dot.clone(),
-        k("A"), d(" all"), dot.clone(),
-        k("N"), d(" none"), dot.clone(),
-        Span::styled("Enter", Style::default().fg(C_OK).add_modifier(Modifier::BOLD)),
-        d(" review"), dot.clone(),
-        Span::styled("Q", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        k("↑↓"),
+        d(" navigate"),
+        dot.clone(),
+        k("Space"),
+        d(" toggle"),
+        dot.clone(),
+        k("A"),
+        d(" all"),
+        dot.clone(),
+        k("N"),
+        d(" none"),
+        dot.clone(),
+        Span::styled(
+            "Enter",
+            Style::default().fg(C_OK).add_modifier(Modifier::BOLD),
+        ),
+        d(" review"),
+        dot.clone(),
+        Span::styled(
+            "Q",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         d(" quit"),
     ]);
 
@@ -1449,7 +1857,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(C_BORDER))
-        .title(" ubuntu-installer ")
+        .title(format!(" ubuntu-installer v{} ", env!("CARGO_PKG_VERSION")))
         .title_style(
             Style::default()
                 .fg(Color::Black)
@@ -1472,7 +1880,9 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::styled(
                 "Re-run with: sudo ./installer",
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]);
         f.render_widget(Paragraph::new(vec![line1, line2, line3]).block(block), area);
@@ -1491,9 +1901,12 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
     const SUFFIX: usize = 9;
     let name_w = inner_w.saturating_sub(PREFIX + SUFFIX);
 
-    let cursor   = app.cursor;
-    let cur_bg   = Style::default().bg(C_CURSOR);
-    let cur_bold = Style::default().bg(C_CURSOR).fg(Color::White).add_modifier(Modifier::BOLD);
+    let cursor = app.cursor;
+    let cur_bg = Style::default().bg(C_CURSOR);
+    let cur_bold = Style::default()
+        .bg(C_CURSOR)
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
 
     let items: Vec<ListItem> = app
         .entries
@@ -1502,9 +1915,13 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|(i, entry)| match entry {
             // ── Category header ──────────────────────────────────────────────
             Entry::Category(name) => {
-                let head  = format!("  ─── {} ", name);
-                let hlen  = head.chars().count();
-                let fill  = if inner_w > hlen { "─".repeat(inner_w - hlen) } else { String::new() };
+                let head = format!("  ─── {} ", name);
+                let hlen = head.chars().count();
+                let fill = if inner_w > hlen {
+                    "─".repeat(inner_w - hlen)
+                } else {
+                    String::new()
+                };
                 ListItem::new(Line::from(Span::styled(
                     format!("{}{}", head, fill),
                     Style::default().fg(C_CAT).add_modifier(Modifier::BOLD),
@@ -1513,14 +1930,24 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
 
             // ── Package row ──────────────────────────────────────────────────
             Entry::Pkg(idx) => {
-                let pkg       = &app.packages[*idx];
+                let pkg = &app.packages[*idx];
                 let is_cursor = i == cursor;
-                let locked    = !app.is_root && pkg.requires_root;
+                let dep_locked = pkg.requires_pkg.map_or(false, |dep| {
+                    !app.packages.iter().any(|p| p.name == dep && (p.installed || p.selected))
+                });
+                let locked = (!app.is_root && pkg.requires_root) || dep_locked;
+                let installed = pkg.installed;
                 let (dot, _badge, dot_col) = type_meta(&pkg.cmd);
 
                 // Cursor arrow (2 chars)
-                let (arrow, arrow_style) = if is_cursor && !locked {
-                    ("▶ ", Style::default().fg(Color::Cyan).bg(C_CURSOR).add_modifier(Modifier::BOLD))
+                let (arrow, arrow_style) = if is_cursor && !locked && !installed {
+                    (
+                        "▶ ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .bg(C_CURSOR)
+                            .add_modifier(Modifier::BOLD),
+                    )
                 } else if is_cursor {
                     ("▶ ", Style::default().fg(C_DIM).bg(C_CURSOR))
                 } else {
@@ -1528,7 +1955,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                 };
 
                 // Type dot (1 char + 1 space = 2 chars)
-                let dot_style = if locked {
+                let dot_style = if locked || installed {
                     Style::default().fg(C_DIM)
                 } else if is_cursor {
                     Style::default().fg(Color::White).bg(C_CURSOR)
@@ -1536,19 +1963,32 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     Style::default().fg(dot_col)
                 };
 
-                // Checkbox "[x] " (4 chars) — locked packages show "[-]"
-                let (ch, ch_col) = if locked {
+                // Checkbox "[x] " (4 chars) — installed: [✓], locked: [-]
+                let (ch, ch_col) = if installed {
+                    ("✓", C_DIM)
+                } else if locked {
                     ("-", C_DIM)
                 } else if pkg.selected {
                     ("x", if is_cursor { C_OK } else { Color::Green })
                 } else {
                     (" ", Color::DarkGray)
                 };
-                let brk_col   = if locked { C_DIM } else if is_cursor { Color::White } else { C_DIM };
-                let brk_style = Style::default().fg(brk_col)
-                    .bg(if is_cursor { C_CURSOR } else { Color::Reset });
-                let ch_style  = Style::default().fg(ch_col)
-                    .bg(if is_cursor { C_CURSOR } else { Color::Reset });
+                let brk_col = if locked || installed {
+                    C_DIM
+                } else if is_cursor {
+                    Color::White
+                } else {
+                    C_DIM
+                };
+                let brk_style = Style::default().fg(brk_col).bg(if is_cursor {
+                    C_CURSOR
+                } else {
+                    Color::Reset
+                });
+                let ch_style =
+                    Style::default()
+                        .fg(ch_col)
+                        .bg(if is_cursor { C_CURSOR } else { Color::Reset });
 
                 // Name (padded / truncated to name_w chars)
                 let display_name = if pkg.name.len() <= name_w {
@@ -1558,23 +1998,40 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                 } else {
                     " ".repeat(name_w)
                 };
-                let name_style = if locked {
+                let name_style = if installed {
+                    Style::default()
+                        .fg(C_DIM)
+                        .add_modifier(Modifier::CROSSED_OUT)
+                } else if locked {
                     Style::default().fg(C_DIM)
                 } else if is_cursor {
                     cur_bold
                 } else if pkg.selected {
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
 
-                // Root badge " [root]  " (9 chars) or 9 spaces
-                // Locked packages show " [sudo]  " in dim to signal why they're locked.
-                let (root_txt, root_sty) = if locked {
+                // Badge " [done]  " / " [sudo]  " / " [root]  " / spaces (9 chars each)
+                let (root_txt, root_sty) = if installed {
+                    (
+                        " [done]  ",
+                        Style::default().fg(C_DIM).bg(if is_cursor {
+                            C_CURSOR
+                        } else {
+                            Color::Reset
+                        }),
+                    )
+                } else if locked {
                     (
                         " [sudo]  ",
-                        Style::default().fg(C_DIM)
-                            .bg(if is_cursor { C_CURSOR } else { Color::Reset }),
+                        Style::default().fg(C_DIM).bg(if is_cursor {
+                            C_CURSOR
+                        } else {
+                            Color::Reset
+                        }),
                     )
                 } else if pkg.requires_root {
                     (
@@ -1586,18 +2043,21 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                         },
                     )
                 } else {
-                    ("         ", Style::default().bg(if is_cursor { C_CURSOR } else { Color::Reset }))
+                    (
+                        "         ",
+                        Style::default().bg(if is_cursor { C_CURSOR } else { Color::Reset }),
+                    )
                 };
 
                 let line = Line::from(vec![
-                    Span::styled(arrow,        arrow_style),
-                    Span::styled(dot,          dot_style),
+                    Span::styled(arrow, arrow_style),
+                    Span::styled(dot, dot_style),
                     Span::raw(" "),
-                    Span::styled("[",          brk_style),
-                    Span::styled(ch,           ch_style),
-                    Span::styled("] ",         brk_style),
+                    Span::styled("[", brk_style),
+                    Span::styled(ch, ch_style),
+                    Span::styled("] ", brk_style),
                     Span::styled(display_name, name_style),
-                    Span::styled(root_txt,     root_sty),
+                    Span::styled(root_txt, root_sty),
                 ]);
 
                 if is_cursor {
@@ -1616,9 +2076,10 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
         .border_style(Style::default().fg(C_BORDER))
         .title(format!(" Packages ({} total) ", app.packages.len()))
         .title_style(Style::default().fg(C_BORDER).add_modifier(Modifier::BOLD))
-        .title_bottom(
-            ratatui::text::Line::from(Span::styled(legend, Style::default().fg(C_DIM)))
-        );
+        .title_bottom(ratatui::text::Line::from(Span::styled(
+            legend,
+            Style::default().fg(C_DIM),
+        )));
 
     // Use default highlight (no-op) — we do all coloring in each ListItem.
     let list = List::new(items)
@@ -1632,7 +2093,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn render_description(f: &mut Frame, app: &App, area: Rect) {
     let inner_w = area.width.saturating_sub(2) as usize;
-    let sep     = "─".repeat(inner_w);
+    let sep = "─".repeat(inner_w);
 
     let (title, lines) = match app.current_pkg_idx() {
         None => (
@@ -1659,7 +2120,10 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
             ls.push(Line::from(""));
 
             // Separator
-            ls.push(Line::from(Span::styled(sep.clone(), Style::default().fg(C_DIM))));
+            ls.push(Line::from(Span::styled(
+                sep.clone(),
+                Style::default().fg(C_DIM),
+            )));
             ls.push(Line::from(""));
 
             // Type row
@@ -1667,7 +2131,10 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled("  Type   ", Style::default().fg(C_DIM)),
                 Span::styled(dot, Style::default().fg(dot_col)),
                 Span::raw(" "),
-                Span::styled(badge, Style::default().fg(dot_col).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    badge,
+                    Style::default().fg(dot_col).add_modifier(Modifier::BOLD),
+                ),
             ]));
 
             // Root row
@@ -1678,8 +2145,22 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
             };
             ls.push(Line::from(vec![
                 Span::styled("  Root   ", Style::default().fg(C_DIM)),
-                Span::styled(root_str, Style::default().fg(root_col).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    root_str,
+                    Style::default().fg(root_col).add_modifier(Modifier::BOLD),
+                ),
             ]));
+
+            // Installed status row
+            if pkg.installed {
+                ls.push(Line::from(vec![
+                    Span::styled("  Status ", Style::default().fg(C_DIM)),
+                    Span::styled(
+                        "✓ already installed",
+                        Style::default().fg(C_OK).add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+            }
 
             ls.push(Line::from(""));
             ls.push(Line::from(Span::styled(sep, Style::default().fg(C_DIM))));
@@ -1716,8 +2197,8 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_controls(f: &mut Frame, app: &App, area: Rect) {
     let selected = app.selected_count();
-    let total    = app.packages.len();
-    let bar      = progress_bar(selected, total, 20);
+    let total = app.packages.len();
+    let bar = progress_bar(selected, total, 20);
 
     // Title carries the progress bar + count
     let bar_title = format!(" {} {}/{} packages ", bar, selected, total);
@@ -1727,20 +2208,38 @@ fn render_controls(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(C_DIM)
     };
 
-    let k   = |s: &'static str| Span::styled(s, Style::default().fg(C_WARN).add_modifier(Modifier::BOLD));
-    let d   = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
+    let k =
+        |s: &'static str| Span::styled(s, Style::default().fg(C_WARN).add_modifier(Modifier::BOLD));
+    let d = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
     let dot = Span::styled("  ·  ", Style::default().fg(C_DIM));
 
     let line = Line::from(vec![
         Span::raw("  "),
-        k("↑↓"), d(" nav"),     dot.clone(),
-        k("Spc"), d(" toggle"),  dot.clone(),
-        k("A"), d(" all"),       dot.clone(),
-        k("N"), d(" none"),      dot.clone(),
-        k("PgUp/Dn"), d(" jump"), dot.clone(),
-        Span::styled("Enter", Style::default().fg(C_OK).add_modifier(Modifier::BOLD)),
-        d(" install"),           dot.clone(),
-        Span::styled("Q", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        k("↑↓"),
+        d(" nav"),
+        dot.clone(),
+        k("Spc"),
+        d(" toggle"),
+        dot.clone(),
+        k("A"),
+        d(" all"),
+        dot.clone(),
+        k("N"),
+        d(" none"),
+        dot.clone(),
+        k("PgUp/Dn"),
+        d(" jump"),
+        dot.clone(),
+        Span::styled(
+            "Enter",
+            Style::default().fg(C_OK).add_modifier(Modifier::BOLD),
+        ),
+        d(" install"),
+        dot.clone(),
+        Span::styled(
+            "Q",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         d(" quit"),
     ]);
 
@@ -1757,9 +2256,9 @@ fn render_controls(f: &mut Frame, app: &App, area: Rect) {
 // ── Confirm screen ────────────────────────────────────────────────────────────
 
 fn render_confirm(f: &mut Frame, app: &App) {
-    let area    = f.area();
+    let area = f.area();
     let inner_w = area.width.saturating_sub(2) as usize;
-    let sep     = "─".repeat(inner_w);
+    let sep = "─".repeat(inner_w);
     let selected = app.selected_packages();
 
     let mut lines: Vec<Line> = vec![];
@@ -1777,11 +2276,15 @@ fn render_confirm(f: &mut Frame, app: &App) {
     } else {
         // Group packages by install type and render each group
         let type_groups: &[(&str, Color, fn(&InstallCmd) -> bool)] = &[
-            ("APT",   Color::Cyan,         |c| matches!(c, InstallCmd::Apt(_))),
-            ("SH",    Color::LightGreen,   |c| matches!(c, InstallCmd::Script(_))),
-            ("CARGO", Color::LightMagenta, |c| matches!(c, InstallCmd::Cargo(_))),
-            ("PIP",   Color::LightBlue,    |c| matches!(c, InstallCmd::Pip(_))),
-            ("SNAP",  Color::Yellow,       |c| matches!(c, InstallCmd::Snap(_))),
+            ("APT", Color::Cyan, |c| matches!(c, InstallCmd::Apt(_))),
+            ("SH", Color::LightGreen, |c| {
+                matches!(c, InstallCmd::Script(_))
+            }),
+            ("CARGO", Color::LightMagenta, |c| {
+                matches!(c, InstallCmd::Cargo(_))
+            }),
+            ("PIP", Color::LightBlue, |c| matches!(c, InstallCmd::Pip(_))),
+            ("SNAP", Color::Yellow, |c| matches!(c, InstallCmd::Snap(_))),
         ];
 
         for (group_label, group_color, group_filter) in type_groups {
@@ -1791,19 +2294,38 @@ fn render_confirm(f: &mut Frame, app: &App) {
             }
 
             // Section header
-            let head  = format!("  ─── {} ", group_label);
-            let hlen  = head.chars().count();
-            let fill  = if inner_w > hlen { "─".repeat(inner_w - hlen) } else { String::new() };
+            let head = format!("  ─── {} ", group_label);
+            let hlen = head.chars().count();
+            let fill = if inner_w > hlen {
+                "─".repeat(inner_w - hlen)
+            } else {
+                String::new()
+            };
             lines.push(Line::from(vec![
-                Span::styled(head, Style::default().fg(*group_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    head,
+                    Style::default()
+                        .fg(*group_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(fill, Style::default().fg(C_DIM)),
             ]));
             lines.push(Line::from(""));
 
             for pkg in group {
                 lines.push(Line::from(vec![
-                    Span::styled("   ● ", Style::default().fg(*group_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(pkg.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "   ● ",
+                        Style::default()
+                            .fg(*group_color)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        pkg.name,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     if pkg.requires_root {
                         Span::styled("  [root]", Style::default().fg(C_ROOT))
                     } else {
@@ -1820,20 +2342,30 @@ fn render_confirm(f: &mut Frame, app: &App) {
         }
 
         // ── Warnings ──────────────────────────────────────────────────────────
-        let mut warned = false;
-        let push_sep = |ls: &mut Vec<Line>, first: &mut bool| {
-            if !*first { return; }
-            *first = false;
-            ls.push(Line::from(Span::styled(sep.clone(), Style::default().fg(C_DIM))));
+        let mut sep_pushed = false;
+        let mut push_sep_once = |ls: &mut Vec<Line>| {
+            if sep_pushed {
+                return;
+            }
+            sep_pushed = true;
+            ls.push(Line::from(Span::styled(
+                sep.clone(),
+                Style::default().fg(C_DIM),
+            )));
             ls.push(Line::from(""));
         };
 
         if app.has_selected_cargo() && !app.rust_will_be_installed() {
-            push_sep(&mut lines, &mut !warned);
-            warned = true;
+            push_sep_once(&mut lines);
             lines.push(Line::from(vec![
-                Span::styled("  [!] ", Style::default().fg(C_WARN).add_modifier(Modifier::BOLD)),
-                Span::styled("Cargo tools selected but Rust is not. Ensure `cargo` is in PATH,", Style::default().fg(C_WARN)),
+                Span::styled(
+                    "  [!] ",
+                    Style::default().fg(C_WARN).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Cargo tools selected but Rust is not. Ensure `cargo` is in PATH,",
+                    Style::default().fg(C_WARN),
+                ),
             ]));
             lines.push(Line::from(Span::styled(
                 "       or press B and add Rust to your selection.",
@@ -1843,11 +2375,16 @@ fn render_confirm(f: &mut Frame, app: &App) {
         }
 
         if app.has_selected_pip() && !app.python_will_be_installed() {
-            push_sep(&mut lines, &mut !warned);
-            warned = true;
+            push_sep_once(&mut lines);
             lines.push(Line::from(vec![
-                Span::styled("  [!] ", Style::default().fg(C_WARN).add_modifier(Modifier::BOLD)),
-                Span::styled("Python packages selected but Python is not. Ensure `pip3` is in PATH,", Style::default().fg(C_WARN)),
+                Span::styled(
+                    "  [!] ",
+                    Style::default().fg(C_WARN).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Python packages selected but Python is not. Ensure `pip3` is in PATH,",
+                    Style::default().fg(C_WARN),
+                ),
             ]));
             lines.push(Line::from(Span::styled(
                 "       or press B and add Python to your selection.",
@@ -1857,16 +2394,26 @@ fn render_confirm(f: &mut Frame, app: &App) {
         }
 
         if selected.iter().any(|p| p.requires_root) {
-            push_sep(&mut lines, &mut !warned);
+            push_sep_once(&mut lines);
             lines.push(Line::from(vec![
-                Span::styled("  [!] ", Style::default().fg(C_WARN).add_modifier(Modifier::BOLD)),
-                Span::styled("Packages marked [root] require sudo. Run with: ", Style::default().fg(C_WARN)),
-                Span::styled("sudo ./installer", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "  [!] ",
+                    Style::default().fg(C_WARN).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Packages marked [root] require sudo. Run with: ",
+                    Style::default().fg(C_WARN),
+                ),
+                Span::styled(
+                    "sudo ./installer",
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]));
             lines.push(Line::from(""));
         }
 
-        let _ = warned; // suppress unused warning
     }
 
     // Footer keybinds embedded in the bottom border
@@ -1886,9 +2433,10 @@ fn render_confirm(f: &mut Frame, app: &App) {
                 .border_style(Style::default().fg(C_BORDER))
                 .title(title)
                 .title_style(Style::default().fg(C_BORDER).add_modifier(Modifier::BOLD))
-                .title_bottom(
-                    ratatui::text::Line::from(Span::styled(bottom, Style::default().fg(C_DIM)))
-                ),
+                .title_bottom(ratatui::text::Line::from(Span::styled(
+                    bottom,
+                    Style::default().fg(C_DIM),
+                ))),
         )
         .wrap(Wrap { trim: false })
         .scroll((app.confirm_scroll, 0));
@@ -1900,6 +2448,162 @@ fn render_confirm(f: &mut Frame, app: &App) {
 
 fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
+}
+
+fn get_real_home() -> String {
+    std::env::var("SUDO_USER")
+        .ok()
+        .filter(|u| !u.is_empty())
+        .and_then(|u| {
+            Command::new("getent")
+                .args(["passwd", &u])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .split(':')
+                        .nth(5)
+                        .map(|s| s.trim().to_string())
+                })
+        })
+        .unwrap_or_else(|| std::env::var("HOME").unwrap_or_default())
+}
+
+fn get_apt_installed() -> HashSet<String> {
+    let mut set = HashSet::new();
+    if let Ok(out) = Command::new("dpkg-query")
+        .args(["--show", "--showformat=${Package}\t${Status}\n"])
+        .output()
+    {
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            let mut parts = line.splitn(2, '\t');
+            if let (Some(pkg), Some(status)) = (parts.next(), parts.next()) {
+                if status.contains("install ok installed") {
+                    set.insert(pkg.to_string());
+                }
+            }
+        }
+    }
+    set
+}
+
+fn get_snap_installed() -> HashSet<String> {
+    let mut set = HashSet::new();
+    if let Ok(out) = Command::new("snap").arg("list").output() {
+        if out.status.success() {
+            for line in String::from_utf8_lossy(&out.stdout).lines().skip(1) {
+                if let Some(name) = line.split_whitespace().next() {
+                    set.insert(name.to_string());
+                }
+            }
+        }
+    }
+    set
+}
+
+fn get_pip_installed() -> HashSet<String> {
+    let mut set = HashSet::new();
+    if let Ok(out) = Command::new("pip3")
+        .args(["list", "--format=columns"])
+        .output()
+    {
+        if out.status.success() {
+            for line in String::from_utf8_lossy(&out.stdout).lines().skip(2) {
+                if let Some(name) = line.split_whitespace().next() {
+                    set.insert(name.to_lowercase());
+                }
+            }
+        }
+    }
+    set
+}
+
+fn sh_check(cmd: &str) -> bool {
+    Command::new("sh")
+        .args(["-c", cmd])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn gnome_ext_installed(uuid: &str) -> bool {
+    sh_check(&format!(
+        "test -d \"$(eval echo ~${{SUDO_USER:-$USER}})/.local/share/gnome-shell/extensions/{0}\" \
+         || test -d \"/usr/share/gnome-shell/extensions/{0}\"",
+        uuid
+    ))
+}
+
+fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
+    match name {
+        n if n.starts_with("gh") => sh_check("which gh"),
+        "snapd" => sh_check("which snap"),
+        "fd" => sh_check("which fd || which fdfind"),
+        n if n.starts_with("Node.js") => sh_check("which node"),
+        n if n.starts_with("npm") => sh_check("which npm"),
+        n if n.starts_with("Bun") => sh_check("which bun || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.bun/bin/bun\""),
+        n if n.starts_with("Rust") => sh_check("which rustup || which cargo"),
+        n if n.starts_with("rust-analyzer") => sh_check("which rust-analyzer"),
+        n if n.starts_with("CMake") => sh_check("which cmake"),
+        n if n.starts_with("Docker") => sh_check("which docker"),
+        "lazygit" => sh_check("which lazygit"),
+        "bottom  (btm)" => sh_check("which btm"),
+        "Spotify" => apt.contains("spotify-client"),
+        "Tailscale" => apt.contains("tailscale"),
+        "NetBird" => apt.contains("netbird"),
+        "NordVPN" => apt.contains("nordvpn"),
+        "Discord" => apt.contains("discord"),
+        "Slack" => apt.contains("slack-desktop"),
+        n if n.starts_with("FiraCode") => sh_check("fc-list 2>/dev/null | grep -qi FiraCode"),
+        n if n.starts_with("NoMachine") => sh_check("test -d /usr/NX"),
+        n if n.starts_with("GRUB") => apt.contains("grub-customizer"),
+        n if n.starts_with("Google") => apt.contains("google-chrome-stable"),
+        "Signal" => apt.contains("signal-desktop"),
+        "Claude  (desktop)" => apt.contains("claude-desktop"),
+        "Claude Code  (CLI)" => sh_check("which claude || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/claude\""),
+        "Obsidian" => apt.contains("obsidian"),
+        "jcodemunch-mcp" => sh_check("pip3 show jcodemunch-mcp 2>/dev/null | grep -q Name"),
+        "memory-mcp  (local)" => sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\""),
+        // GNOME Shell Extensions
+        "Ubuntu Dock  (gnome-ext)" => gnome_ext_installed("ubuntu-dock@ubuntu.com"),
+        "Ubuntu AppIndicators  (gnome-ext)" => gnome_ext_installed("ubuntu-appindicators@ubuntu.com"),
+        "Desktop Icons NG (DING)  (gnome-ext)" => gnome_ext_installed("ding@rastersoft.com"),
+        "Just Perfection  (gnome-ext)" => gnome_ext_installed("just-perfection-desktop@just-perfection"),
+        "OpenWeather  (gnome-ext)" => gnome_ext_installed("openweather-extension@jenslody.de"),
+        "TopHat  (gnome-ext)" => gnome_ext_installed("tophat@fflewddur.github.io"),
+        "Freon  (gnome-ext)" => gnome_ext_installed("freon@UshakovVasilii_Github.yahoo.com"),
+        "Net Speed Simplified  (gnome-ext)" => gnome_ext_installed("netspeedsimplified@prateekmedia.extension"),
+        "Audio Selector  (gnome-ext)" => gnome_ext_installed("audio-selector@harald65.simon.gmail.com"),
+        "Bluetooth Quick Connect  (gnome-ext)" => gnome_ext_installed("bluetooth-quick-connect@bjarosze.gmail.com"),
+        "Simple Message  (gnome-ext)" => gnome_ext_installed("simple-message@freddez"),
+        _ => false,
+    }
+}
+
+fn check_all_installed(packages: &mut Vec<Package>) {
+    let apt = get_apt_installed();
+    let snaps = get_snap_installed();
+    let pip = get_pip_installed();
+    let home = get_real_home();
+
+    for pkg in packages.iter_mut() {
+        pkg.installed = match &pkg.cmd {
+            InstallCmd::Apt(pkgs) => pkgs.iter().all(|p| apt.contains(*p)),
+            InstallCmd::Snap(name) => snaps.contains(*name),
+            InstallCmd::Pip(pkgs) => pkgs.iter().all(|p| {
+                let n = p.split("==").next().unwrap_or(p).to_lowercase();
+                pip.contains(&n)
+            }),
+            InstallCmd::Cargo(name) => {
+                let path = format!("{}/.cargo/bin/{}", home, name);
+                std::path::Path::new(&path).exists() || sh_check(&format!("which {}", name))
+            }
+            InstallCmd::Script(_) => check_script_installed(pkg.name, &apt),
+        };
+        if pkg.installed {
+            pkg.selected = false;
+        }
+    }
 }
 
 fn run_install(packages: Vec<Package>) {
@@ -1933,11 +2637,15 @@ fn run_install(packages: Vec<Package>) {
 
     let total = packages.len();
     for (idx, pkg) in packages.iter().enumerate() {
-        println!("{c}[{}/{}]{x} {y}Installing: {}{x}", idx + 1, total, pkg.name);
+        println!(
+            "{c}[{}/{}]{x} {y}Installing: {}{x}",
+            idx + 1,
+            total,
+            pkg.name
+        );
 
-        let real_user = std::env::var("SUDO_USER").unwrap_or_else(|_| {
-            std::env::var("USER").unwrap_or_else(|_| "root".to_string())
-        });
+        let real_user = std::env::var("SUDO_USER")
+            .unwrap_or_else(|_| std::env::var("USER").unwrap_or_else(|_| "root".to_string()));
 
         let result = match &pkg.cmd {
             InstallCmd::Apt(pkgs) => Command::new("apt")
@@ -1946,16 +2654,7 @@ fn run_install(packages: Vec<Package>) {
                 .status(),
             InstallCmd::Script(script) => Command::new("sh").args(["-c", script]).status(),
             InstallCmd::Cargo(name) => {
-                let real_home = std::env::var("SUDO_USER")
-                    .ok()
-                    .and_then(|u| {
-                        Command::new("sh")
-                            .args(["-c", &format!("eval echo ~{}", u)])
-                            .output()
-                            .ok()
-                            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                    })
-                    .unwrap_or_else(|| std::env::var("HOME").unwrap_or_default());
+                let real_home = get_real_home();
                 let cargo_bin = format!("{}/.cargo/bin/cargo", real_home);
                 Command::new("sudo")
                     .args(["-u", &real_user, &cargo_bin, "install", name])
@@ -1988,7 +2687,61 @@ fn run_install(packages: Vec<Package>) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+fn dump_json() {
+    let (packages, entries) = build_data();
+    let mut out = String::from("[\n");
+    let mut first = true;
+    let mut current_cat = "";
+    for entry in &entries {
+        match entry {
+            Entry::Category(cat) => {
+                current_cat = cat.trim();
+            }
+            Entry::Pkg(idx) => {
+                let p = &packages[*idx];
+                let (cmd_type, cmd_value) = match &p.cmd {
+                    InstallCmd::Apt(pkgs) => {
+                        let v: Vec<String> = pkgs.iter().map(|s| format!("\"{}\"", s)).collect();
+                        ("apt", format!("[{}]", v.join(",")))
+                    }
+                    InstallCmd::Script(s) => ("sh", format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"))),
+                    InstallCmd::Cargo(s) => ("cargo", format!("\"{}\"", s)),
+                    InstallCmd::Pip(pkgs) => {
+                        let v: Vec<String> = pkgs.iter().map(|s| format!("\"{}\"", s)).collect();
+                        ("pip", format!("[{}]", v.join(",")))
+                    }
+                    InstallCmd::Snap(s) => ("snap", format!("\"{}\"", s)),
+                };
+                let sep = if first { "" } else { ",\n" };
+                first = false;
+                let desc_escaped = p.description
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n");
+                out.push_str(&format!(
+                    "{}  {{\"category\":\"{}\",\"name\":\"{}\",\"description\":\"{}\",\"cmd_type\":\"{}\",\"cmd_value\":{},\"requires_root\":{},\"default_selected\":{}}}",
+                    sep,
+                    current_cat.replace('"', "\\\""),
+                    p.name.replace('"', "\\\""),
+                    desc_escaped,
+                    cmd_type,
+                    cmd_value,
+                    p.requires_root,
+                    p.selected,
+                ));
+            }
+        }
+    }
+    out.push_str("\n]\n");
+    print!("{}", out);
+}
+
 fn main() -> io::Result<()> {
+    if std::env::args().any(|a| a == "--dump-json") {
+        dump_json();
+        return Ok(());
+    }
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;

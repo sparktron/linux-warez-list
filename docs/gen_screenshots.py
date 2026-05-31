@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Generate HTML mock-ups of the installer-tui for README screenshots."""
+"""Generate HTML mock-ups of the installer-tui for README screenshots.
+
+Package data is sourced live from `./installer --dump-json` so this file
+never needs manual updates when packages are added or removed from main.rs.
+"""
 
 import html as H
+import json
 import os
+import subprocess
+import textwrap
 
 # ── Terminal geometry ──────────────────────────────────────────────────────────
 W   = 100   # total columns
@@ -14,6 +21,51 @@ RI  = RW - 2   # right inner = 38
 PREFIX   = 8          # "▶ ● [x] "
 SUFFIX   = 9          # " [root]  "
 NAME_W   = LI - PREFIX - SUFFIX   # 41
+
+# ── Load package data from the binary ─────────────────────────────────────────
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _find_installer():
+    candidates = [
+        os.path.join(REPO_ROOT, "installer"),
+        os.path.join(REPO_ROOT, "installer-tui", "target", "release", "installer-tui"),
+        os.path.join(REPO_ROOT, "installer-tui", "target", "debug",   "installer-tui"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    raise FileNotFoundError(
+        "No installer binary found. Build with `cargo build` in installer-tui/ "
+        "or run `cargo build --release` and copy the binary to the repo root as `installer`."
+    )
+
+def load_packages():
+    binary = _find_installer()
+    result = subprocess.run([binary, "--dump-json"], capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
+
+PKGS = load_packages()
+TOTAL = len(PKGS)
+
+# ── CSS color class per cmd_type ───────────────────────────────────────────────
+DOT_CLS = {"apt": "c", "sh": "lg", "cargo": "lm", "pip": "lb", "snap": "lyl"}
+
+# Cursor package for the select screen mock-up
+CURSOR_NAME = "fzf"
+
+# Packages shown in the confirm screen mock-up: all default-selected plus one
+# representative package per remaining install type.
+_CONFIRM_EXTRAS = {
+    "Docker  +  Docker Compose",
+    "Starship  (shell prompt)",
+    "pytest  +  pytest-mock  +  pytest-cov",
+    "Notion  (snap)",
+}
+CONFIRM_PKGS = [
+    p for p in PKGS
+    if p["default_selected"] or p["name"] in _CONFIRM_EXTRAS
+]
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -31,77 +83,9 @@ def pad(text, width):
 def hbar(n):
     return "─" * n
 
-# ── Package definitions ────────────────────────────────────────────────────────
-# (name, dot_color_cls, selected, requires_root, is_cursor)
-# None for dot_color_cls = category header
-
-PKGS = [
-    # name                              dot    sel    root   cursor
-    ("System Tools",                    None,  None,  None,  False),
-    ("build-essential",                 "c",   True,  True,  False),
-    ("git",                             "c",   True,  True,  False),
-    ("gh  (GitHub CLI)",                "lg",  False, True,  False),
-    ("linux-lowlatency  (kernel)",      "c",   False, True,  False),
-    ("snapd",                           "lg",  False, True,  False),
-    ("curl",                            "c",   True,  True,  False),
-    ("wget",                            "c",   True,  True,  False),
-    ("unzip",                           "c",   True,  True,  False),
-    ("Languages & Runtimes",            None,  None,  None,  False),
-    ("Python 3.10  +  pip  +  venv",    "c",   True,  True,  False),
-    ("Node.js 20  +  npm",              "lg",  False, True,  False),
-    ("Rust  (via rustup)",              "lg",  False, False, False),
-    ("CLI Tools",                       None,  None,  None,  False),
-    ("ripgrep  (rg)",                   "c",   True,  True,  False),
-    ("bat",                             "c",   False, True,  False),
-    ("fzf",                             "c",   False, True,  True),   # ← cursor
-    ("hstr  (bash history)",            "c",   False, True,  False),
-    ("rsync",                           "c",   False, True,  False),
-    ("yt-dlp",                          "c",   False, True,  False),
-    ("htop",                            "c",   False, True,  False),
-    ("tree",                            "c",   False, True,  False),
-    ("strace",                          "c",   False, True,  False),
-    ("ShellCheck",                      "c",   False, True,  False),
-    ("duf",                             "c",   False, True,  False),
-    ("ncdu",                            "c",   False, True,  False),
-    ("xclip",                           "c",   False, True,  False),
-    ("pipx",                            "c",   False, True,  False),
-    ("lazygit",                         "lg",  False, True,  False),
-    ("bottom  (btm)",                   "lyl", False, True,  False),
-    ("Containers",                      None,  None,  None,  False),
-    ("Docker  +  Docker Compose",       "lg",  False, True,  False),
-    ("Security & Networking",           None,  None,  None,  False),
-    ("nmap",                            "c",   False, True,  False),
-    ("netcat  (nc)",                    "c",   False, True,  False),
-    ("aircrack-ng",                     "c",   False, True,  False),
-    ("wifite  +  hcxtools",             "c",   False, True,  False),
-    ("Tailscale",                       "lyl", False, True,  False),
-    ("NetBird",                         "lyl", False, True,  False),
-    ("NordVPN",                         "lyl", False, True,  False),
-    ("OpenSSH Server  (sshd)",          "c",   False, True,  False),
-    ("net-tools",                       "c",   False, True,  False),
-    ("WireGuard Tools  (wg)",           "c",   False, True,  False),
-    ("Desktop Applications",            None,  None,  None,  False),
-    ("Google Chrome",                   "lg",  False, True,  False),
-    ("Signal",                          "lg",  False, True,  False),
-    ("Claude  (desktop)",               "lg",  False, True,  False),
-    ("GNOME Tweaks",                    "c",   False, True,  False),
-    ("Solaar",                          "c",   False, True,  False),
-    ("Meld",                            "c",   False, True,  False),
-    ("Peek",                            "c",   False, True,  False),
-]
-
-# fzf description (cursor package, wrapped to RI-2 = 36 chars per line)
-FZFDESC = [
-    "General-purpose interactive fuzzy",
-    "finder. Pipe any list for instant",
-    "filtering — shell history search",
-    "(Ctrl+R), file picker, git branch",
-    "selector. Shell keybindings",
-    "installed automatically.",
-    "",
-    "$ git log --oneline | fzf",
-    "$ cd $(fd -t d | fzf)",
-]
+def wrap_desc(desc, width):
+    """Wrap a long description string to `width` chars per line."""
+    return textwrap.wrap(desc, width=width) or [""]
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
 
@@ -146,42 +130,7 @@ def row(*spans, hl=False):
     cls = "row hl" if hl else "row"
     return f'<div class="{cls}">{content}</div>'
 
-# ── Left panel rows ────────────────────────────────────────────────────────────
-
-def left_row(pkg):
-    name, dot_cls, selected, requires_root, is_cursor = pkg
-
-    if dot_cls is None:
-        head = f"  {hbar(3)} {name} "
-        fill = hbar(max(0, LI - len(head)))
-        return row(("│","c"), (head + fill, "yb"), ("│","c"))
-
-    arrow     = "▶ " if is_cursor else "  "
-    arrow_cls = "cb" if is_cursor else "dim"
-    dot_col   = "wh" if is_cursor else dot_cls
-    check     = "x" if selected else " "
-    check_col = ("gb" if is_cursor else "g") if selected else "dg"
-    brk_col   = "dim"
-    name_col  = "wb" if (is_cursor or selected) else "wh"
-    name_d    = pad(name, NAME_W)
-    suffix    = " [root]  " if requires_root else "         "
-    suf_col   = ("lrb" if is_cursor else "lr") if requires_root else ""
-
-    return row(
-        ("│","c"),
-        (arrow, arrow_cls),
-        ("●", dot_col),
-        (" ", ""),
-        ("[", brk_col),
-        (check, check_col),
-        ("] ", brk_col),
-        (name_d, name_col),
-        (suffix, suf_col),
-        ("│","c"),
-        hl=is_cursor,
-    )
-
-# ── Right panel rows ───────────────────────────────────────────────────────────
+# ── Right-panel helpers ────────────────────────────────────────────────────────
 
 def right_empty():
     return [("│","c"), (" "*RI,""), ("│","c")]
@@ -203,33 +152,44 @@ def right_cmd(cmd):
     pad_s = " " * max(0, RI - len(inner))
     return [("│","c"), ("  $ ","dim"), (cmd,"gb"), (pad_s,""), ("│","c")]
 
-# Build right panel lines
-RIGHT_ROWS = (
-    [right_empty()]
-    + [right_text(l) for l in FZFDESC]
-    + [right_empty(), right_sep(), right_empty()]
-    + [right_field("Type","● apt", "cb")]
-    + [right_field("Root","yes  (sudo required)", "lr")]
-    + [right_empty(), right_sep(), right_empty()]
-    + [right_cmd("apt install -y fzf")]
-    + [right_empty()] * 20
-)
-
-# ── Build selection screen ─────────────────────────────────────────────────────
+# ── Build select screen ────────────────────────────────────────────────────────
 
 def build_select():
     lines = []
+
+    # Find cursor package and build its right-panel description lines
+    cursor_pkg = next((p for p in PKGS if p["name"] == CURSOR_NAME), PKGS[0])
+    desc_lines = wrap_desc(cursor_pkg["description"], RI - 2)
+    dot_cls     = DOT_CLS[cursor_pkg["cmd_type"]]
+    type_label  = cursor_pkg["cmd_type"]
+    root_txt    = "yes  (sudo required)" if cursor_pkg["requires_root"] else "no"
+    root_cls    = "lr" if cursor_pkg["requires_root"] else "g"
+
+    # Build right-panel rows
+    right_rows = (
+        [right_empty()]
+        + [right_text(l) for l in desc_lines]
+        + [right_empty(), right_sep(), right_empty()]
+        + [right_field("Type", f"● {type_label}", dot_cls)]
+        + [right_field("Root", root_txt, root_cls)]
+        + [right_empty(), right_sep(), right_empty()]
+        + [right_cmd(f"{type_label} install -y {cursor_pkg['name']}")]
+        + [right_empty()] * 20
+    )
+
+    # Count default-selected
+    n_selected = sum(1 for p in PKGS if p["default_selected"])
+    selected_lbl = f"{n_selected}/{TOTAL} selected  "
 
     # Title bar
     label = " ubuntu-installer "
     lines.append(row(("╭","c"), (label,"inv"), (hbar(W-2-len(label)),"c"), ("╮","c")))
 
     lh = "  Ubuntu Dev Environment Installer"
-    rh = "8/84 selected  "
     lines.append(row(
         ("│","c"), (lh,"cb"),
-        (" "*(W-2-len(lh)-len(rh)), ""),
-        (rh,"gb"), ("│","c")
+        (" "*(W-2-len(lh)-len(selected_lbl)), ""),
+        (selected_lbl,"gb"), ("│","c")
     ))
     lines.append(row(
         ("│","c"), ("  ",""),
@@ -243,41 +203,53 @@ def build_select():
     lines.append(row(("╰"+hbar(W-2)+"╯","c")))
 
     # Panel top borders
-    pt = " Packages (84 total) "
-    dt = " fzf "
+    pt = f" Packages ({TOTAL} total) "
+    dt = f" {cursor_pkg['name']} "
     lines.append(row(
         ("╭","c"),(pt,"cb"),(hbar(LW-2-len(pt)),"c"),("╮","c"),
         ("╭","c"),(dt,"cb"),(hbar(RW-2-len(dt)),"c"),("╮","c"),
     ))
 
-    # Content rows
+    # Content rows — iterate flat list (categories + packages)
     ri = 0
+    seen_cats = set()
     for pkg in PKGS:
-        name, dot_cls, selected, requires_root, cursor = pkg
-        if dot_cls is None:
-            head = f"  {hbar(3)} {name} "
+        cat = pkg["category"]
+        if cat not in seen_cats:
+            seen_cats.add(cat)
+            head = f"  {hbar(3)} {cat} "
             fill = hbar(max(0, LI - len(head)))
             l_spans = [("│","c"), (head+fill,"yb"), ("│","c")]
-        else:
-            arrow     = "▶ " if cursor else "  "
-            arrow_cls = "cb" if cursor else "dim"
-            dot_col   = "wh" if cursor else dot_cls
-            check     = "x" if selected else " "
-            check_col = ("gb" if cursor else "g") if selected else "dg"
-            brk_col   = "dim"
-            name_col  = "wb" if (cursor or selected) else "wh"
-            name_d    = pad(name, NAME_W)
-            suffix    = " [root]  " if requires_root else "         "
-            suf_col   = ("lrb" if cursor else "lr") if requires_root else ""
-            l_spans = [
-                ("│","c"), (arrow,arrow_cls), ("●",dot_col), (" ",""),
-                ("[",brk_col), (check,check_col), ("] ",brk_col),
-                (name_d,name_col), (suffix,suf_col), ("│","c"),
-            ]
-        rr = RIGHT_ROWS[ri] if ri < len(RIGHT_ROWS) else right_empty()
+            rr = right_rows[ri] if ri < len(right_rows) else right_empty()
+            all_spans = l_spans + rr
+            content = "".join(sp(t,c) for t,c in all_spans)
+            lines.append(f'<div class="row">{content}</div>')
+            ri += 1
+
+        is_cursor = pkg["name"] == CURSOR_NAME
+        selected  = pkg["default_selected"]
+        requires_root = pkg["requires_root"]
+        dcls = DOT_CLS[pkg["cmd_type"]]
+
+        arrow     = "▶ " if is_cursor else "  "
+        arrow_cls = "cb" if is_cursor else "dim"
+        dot_col   = "wh" if is_cursor else dcls
+        check     = "x" if selected else " "
+        check_col = ("gb" if is_cursor else "g") if selected else "dg"
+        brk_col   = "dim"
+        name_col  = "wb" if (is_cursor or selected) else "wh"
+        name_d    = pad(pkg["name"], NAME_W)
+        suffix    = " [root]  " if requires_root else "         "
+        suf_col   = ("lrb" if is_cursor else "lr") if requires_root else ""
+        l_spans   = [
+            ("│","c"), (arrow,arrow_cls), ("●",dot_col), (" ",""),
+            ("[",brk_col), (check,check_col), ("] ",brk_col),
+            (name_d,name_col), (suffix,suf_col), ("│","c"),
+        ]
+        rr = right_rows[ri] if ri < len(right_rows) else right_empty()
         all_spans = l_spans + rr
         content = "".join(sp(t,c) for t,c in all_spans)
-        cls = "row hl" if cursor else "row"
+        cls = "row hl" if is_cursor else "row"
         lines.append(f'<div class="{cls}">{content}</div>')
         ri += 1
 
@@ -290,7 +262,7 @@ def build_select():
 
     # Controls
     bar = "[████░░░░░░░░░░░░░░░░]"
-    ct  = f" {bar} 8/84 packages "
+    ct  = f" {bar} {n_selected}/{TOTAL} packages "
     lines.append(row(("╭","c"),(ct,"gb"),(hbar(W-2-len(ct)),"c"),("╮","c")))
     lines.append(row(
         ("│","c"), ("  ",""),
@@ -309,70 +281,54 @@ def build_select():
 
 # ── Build confirm screen ───────────────────────────────────────────────────────
 
-CONFIRM_PKGS = [
-    ("build-essential",        "c",   "apt"),
-    ("git",                    "c",   "apt"),
-    ("Python 3.10 + pip",      "c",   "apt"),
-    ("ripgrep  (rg)",          "c",   "apt"),
-    ("nmap",                   "c",   "apt"),
-    ("gh  (GitHub CLI)",       "lg",  "sh"),
-    ("Docker + Compose",       "lg",  "sh"),
-    ("Google Chrome",          "lg",  "sh"),
-    ("Signal",                 "lg",  "sh"),
-    ("Starship",               "lm",  "cargo"),
-    ("Just  (task runner)",    "lm",  "cargo"),
-    ("pytest + mock + cov",    "lb",  "pip"),
-    ("SQLAlchemy",             "lb",  "pip"),
-    ("Discord",                "lyl", "snap"),
-    ("Tailscale",              "lyl", "snap"),
-    ("NordVPN",                "lyl", "snap"),
-]
-
 CMDS = {
-    "apt":   ("apt install -y ...",  "c"),
-    "sh":    ("curl ... | sh",       "lg"),
-    "cargo": ("cargo install ...",   "lm"),
-    "pip":   ("pip3 install ...",    "lb"),
-    "snap":  ("snap install ...",    "lyl"),
+    "apt":   "apt install -y ...",
+    "sh":    "curl ... | sh",
+    "cargo": "cargo install ...",
+    "pip":   "pip3 install ...",
+    "snap":  "snap install ...",
 }
+
+TYPE_LABELS = {"apt":"APT","sh":"SH","cargo":"CARGO","pip":"PIP","snap":"SNAP"}
+TYPE_COLORS = {"apt":"c","sh":"lg","cargo":"lm","pip":"lb","snap":"lyl"}
 
 def build_confirm():
     lines = []
     IW = W - 2  # inner = 98
+    n_confirm = len(CONFIRM_PKGS)
 
-    title = " Review Installation  ·  16/84 packages "
+    title = f" Review Installation  ·  {n_confirm}/{TOTAL} packages "
     lines.append(row(("╭","c"),(title,"cb"),(hbar(W-2-len(title)),"c"),("╮","c")))
     lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
-    groups = {}
-    order  = []
-    for name, dot_cls, typ in CONFIRM_PKGS:
-        if typ not in groups:
-            groups[typ] = []
-            order.append(typ)
-        groups[typ].append((name, dot_cls))
-
-    type_labels = {"apt":"APT","sh":"SH","cargo":"CARGO","pip":"PIP","snap":"SNAP"}
-    type_colors = {"apt":"c","sh":"lg","cargo":"lm","pip":"lb","snap":"lyl"}
+    # Group by cmd_type preserving order
+    groups: dict[str, list] = {}
+    order:  list[str] = []
+    for pkg in CONFIRM_PKGS:
+        t = pkg["cmd_type"]
+        if t not in groups:
+            groups[t] = []
+            order.append(t)
+        groups[t].append(pkg)
 
     for typ in order:
         pkgs = groups[typ]
-        col  = type_colors[typ]
-        lbl  = type_labels[typ]
+        col  = TYPE_COLORS[typ]
+        lbl  = TYPE_LABELS[typ]
         head = f"  {hbar(3)} {lbl} "
         fill = hbar(IW - len(head))
         lines.append(row(("│","c"),(head,col),(fill,"dim"),("│","c")))
         lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
-        cmd_txt, _ = CMDS[typ]
-        for pname, pdot in pkgs:
-            ppad  = " " * max(0, IW - 5 - len(pname) - 8)
-            root  = "[root]  " if typ in ("apt","sh","snap") else "        "
+        cmd_txt = CMDS[typ]
+        for pkg in pkgs:
+            pname  = pkg["name"]
+            root   = "[root]  " if pkg["requires_root"] else "        "
+            ppad   = " " * max(0, IW - 5 - len(pname) - 8)
             lines.append(row(
                 ("│","c"),("   ",""),("● ",col),(pname,"wb"),(ppad,""),(root,"lr"),("│","c")
             ))
-            cline = f"       $ {cmd_txt}"
-            cpad  = " " * max(0, IW - len(cline))
+            cpad = " " * max(0, IW - len(f"       $ {cmd_txt}"))
             lines.append(row(("│","c"),("       $ ","dim"),(cmd_txt,"dim"),(cpad,""),("│","c")))
             lines.append(row(("│","c"),(" "*IW,""),("│","c")))
 
@@ -417,4 +373,4 @@ confirm_html = page(render(build_confirm()), "installer-tui — confirm")
 with open(f"{out}/screenshot-select.html",  "w") as f: f.write(select_html)
 with open(f"{out}/screenshot-confirm.html", "w") as f: f.write(confirm_html)
 
-print("Done →", out)
+print(f"Done → {out}  ({TOTAL} packages, {len(CONFIRM_PKGS)} on confirm screen)")

@@ -22,11 +22,12 @@ paths that must stay in sync:
 | `install-all.sh` | Headless bash installer | Any package change |
 | `README.md` | User docs, package count, package tables | Any package change |
 | `LINUX_WAREZ_LIST.md` | Extended human-readable inventory | Any package change |
-| `docs/gen_screenshots.py` | Generates HTML mocks for README screenshots | Package add/remove/rename |
+| `docs/gen_screenshots.py` | Generates HTML mocks for README screenshots | HTML/layout changes only (package data is auto-derived from `--dump-json`) |
 | `installer` | Pre-built TUI binary (committed) | After any `main.rs` change |
 | `gather-software-inventory.sh` | Dumps JSON of installed software | Rarely |
 | `software-inventory.json` | Snapshot output | Rarely |
-| `installer-tui/Cargo.toml` | Rust dependencies | Dep changes only |
+| `installer-tui/Cargo.toml` | Rust dependencies and version | Dep changes or version bumps |
+| `CHANGELOG.md` | Versioned release notes | Every release |
 
 ## The Sync Rule (Critical)
 
@@ -38,7 +39,10 @@ of these:
 2. `install-all.sh` -- the matching section
 3. `README.md` -- the package table in the matching category
 4. `LINUX_WAREZ_LIST.md` -- the matching entry
-5. `docs/gen_screenshots.py` -- the `PKGS` list (for add/remove/rename only)
+
+`docs/gen_screenshots.py` **no longer needs manual updates for package
+changes.** Since v0.8.0 it calls `./installer --dump-json` at runtime to
+derive all package data. Only touch it if the HTML rendering logic changes.
 
 After editing `main.rs`, rebuild and copy the binary:
 
@@ -91,13 +95,9 @@ b.pkg(
 b.cat("  New Category Name");
 ```
 
-Add it between existing categories in `build_data()`. The `PKGS` list in
-`docs/gen_screenshots.py` uses `None` for the dot class to denote category
-headers:
-
-```python
-("New Category Name", None, None, None, False),
-```
+Add it between existing categories in `build_data()`. Since v0.8.0,
+`docs/gen_screenshots.py` derives categories automatically from
+`./installer --dump-json` — no Python edits needed.
 
 ### Installation Logic
 
@@ -175,14 +175,86 @@ for version conflicts.
 
 ## Package Count
 
-README and TUI both reference the total package count (currently 84). Update
+README and TUI both reference the total package count (currently 101). Update
 the count in:
 
-- `README.md` line 3 ("65 packages"), line 23 ("all 65 packages"), line 62
-  heading, and anywhere else it appears
-- `docs/gen_screenshots.py` in the title bar strings ("65 total", "5/65", etc.)
-- The TUI derives its count dynamically from `build_data()` so no manual update
-  is needed there
+- `README.md` — the total count in the header and anywhere it appears in prose
+
+The TUI and `docs/gen_screenshots.py` both derive their counts dynamically
+(TUI from `build_data()`, generator from `./installer --dump-json`) so neither
+needs a manual count update.
+
+## `--dump-json`: Live Package Data Export
+
+Since v0.8.0, the installer binary supports a `--dump-json` flag:
+
+```bash
+./installer --dump-json
+```
+
+Prints all package data as a JSON array to stdout and exits without launching
+the TUI. Each element:
+
+```json
+{
+  "category":         "CLI Tools",
+  "name":             "fzf",
+  "description":      "General-purpose interactive fuzzy finder…",
+  "cmd_type":         "apt",
+  "cmd_value":        ["fzf"],
+  "requires_root":    true,
+  "default_selected": false
+}
+```
+
+`cmd_value` is a JSON array for `apt`/`pip`, or a JSON string for
+`sh`/`cargo`/`snap`.
+
+Uses: `docs/gen_screenshots.py` calls this at runtime. Any future tooling
+(CI diff checks, README table generators, package count validation) should
+use this rather than parsing Rust source directly.
+
+**Note:** JSON is serialised manually without `serde`. The `dump_json()`
+function in `main.rs` escapes `\`, `"`, and `\n` via `replace()` chains.
+If you add a script string containing a literal two-character sequence `\"`,
+it will be double-escaped. Avoid such strings or update the escaping logic.
+
+## Versioning
+
+The version is defined in one place:
+
+```
+installer-tui/Cargo.toml  →  version = "X.Y.Z"
+```
+
+The TUI title bar reads it at compile time via `env!("CARGO_PKG_VERSION")` in
+`render_title()`. There is no separate version string to keep in sync — bumping
+`Cargo.toml` and rebuilding the binary is the entire update.
+
+### When to bump
+
+| Change type | Version component | Example |
+|-------------|-------------------|---------|
+| New packages, new categories, major features | Minor (`Y`) | `0.8.0 → 0.9.0` |
+| Bug fixes, security patches, doc-only changes | Patch (`Z`) | `0.8.0 → 0.8.1` |
+| Breaking changes to CLI flags or JSON schema | Major (`X`) | `0.8.0 → 1.0.0` |
+
+### How to bump
+
+1. Edit `installer-tui/Cargo.toml`:
+   ```toml
+   version = "0.9.0"
+   ```
+2. Rebuild and copy the binary:
+   ```bash
+   cd installer-tui && cargo build --release
+   /usr/bin/cp target/release/installer-tui ../installer && chmod +x ../installer
+   ```
+3. Add a `## [X.Y.Z] — YYYY-MM-DD` section to `CHANGELOG.md` documenting
+   what changed and why (see existing entries for the expected level of detail).
+
+The TUI title and `--dump-json` output both reflect the new version automatically
+after the rebuild.
 
 ## Build
 

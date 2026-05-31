@@ -31,7 +31,40 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME=$(eval echo "~${REAL_USER}")
+REAL_HOME=$(getent passwd "${REAL_USER}" | cut -d: -f6)
+OS_CODENAME="$(
+  . /etc/os-release
+  echo "${VERSION_CODENAME:-jammy}"
+)"
+
+remove_snap_if_installed() {
+  local snap_name="$1"
+
+  if command -v snap &> /dev/null && snap list "${snap_name}" &> /dev/null; then
+    log "Removing ${snap_name} snap after installing deb/APT package..."
+    snap remove "${snap_name}" || warn "Could not remove ${snap_name} snap"
+  fi
+}
+
+install_deb_from_url() {
+  local app_name="$1"
+  local url="$2"
+  local deb_path
+
+  deb_path="$(mktemp "/tmp/${app_name}.XXXXXX.deb")"
+  curl -fL "${url}" -o "${deb_path}"
+  apt install -y "${deb_path}"
+  rm -f "${deb_path}"
+}
+
+disable_incompatible_discord_apparmor_profile() {
+  if [[ -f /etc/apparmor.d/discord && ! -e /etc/apparmor.d/abi/4.0 ]]; then
+    warn "Disabling Discord AppArmor profile that requires unavailable abi/4.0"
+    ln -sf /etc/apparmor.d/discord /etc/apparmor.d/disable/discord
+    apparmor_parser -R /etc/apparmor.d/discord >/dev/null 2>&1 || true
+    systemctl reload apparmor >/dev/null 2>&1 || true
+  fi
+}
 
 # Update package list
 log "Updating package list..."
@@ -106,6 +139,18 @@ if ! command -v node &> /dev/null; then
   apt install -y nodejs
 else
   log "Node.js already installed: $(node --version)"
+fi
+
+# ===== NPM (upgrade to latest) =====
+log "Upgrading npm to latest stable..."
+npm install -g npm@latest 2>/dev/null || warn "npm upgrade failed"
+
+# ===== BUN =====
+if ! sudo -u "${REAL_USER}" bash -c 'command -v bun' &> /dev/null; then
+  log "Installing Bun for ${REAL_USER}..."
+  sudo -u "${REAL_USER}" bash -c 'curl -fsSL https://bun.sh/install | bash'
+else
+  log "Bun already installed: $(sudo -u "${REAL_USER}" bash -c 'bun --version')"
 fi
 
 # ===== RUST (if not already installed) =====
@@ -240,8 +285,18 @@ else
   log "lazygit already installed: $(lazygit --version | head -1)"
 fi
 
-log "Installing bottom (btm) via snap..."
-snap install bottom 2>/dev/null || warn "Failed to install bottom via snap"
+log "Installing bottom (btm) via .deb..."
+BTM_DEB_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest \
+  | grep "browser_download_url" | grep "bottom_.*_amd64\.deb" | grep -v musl | head -1 \
+  | cut -d'"' -f4)
+if [[ -n "${BTM_DEB_URL}" ]]; then
+  curl -Lo /tmp/bottom.deb "${BTM_DEB_URL}"
+  dpkg -i /tmp/bottom.deb || apt install -f -y || warn "Failed to install bottom .deb"
+  rm -f /tmp/bottom.deb
+  remove_snap_if_installed bottom
+else
+  warn "Could not fetch bottom release URL -- install manually from https://github.com/ClementTsang/bottom/releases"
+fi
 
 # ===== CONTAINER & VIRTUALIZATION =====
 echo ""
@@ -277,14 +332,43 @@ apt install -y aircrack-ng
 log "Installing wifite + hcxtools..."
 apt install -y wifite hcxtools
 
-log "Installing Tailscale via snap..."
-snap install tailscale 2>/dev/null || warn "Failed to install Tailscale via snap"
+log "Installing Tailscale via APT..."
+if ! command -v tailscale &> /dev/null; then
+  curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${OS_CODENAME}.noarmor.gpg" \
+    | tee /usr/share/keyrings/tailscale-archive-keyring.gpg > /dev/null
+  curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${OS_CODENAME}.tailscale-keyring.list" \
+    | tee /etc/apt/sources.list.d/tailscale.list > /dev/null
+  apt update
+  apt install -y tailscale
+else
+  log "Tailscale already installed: $(tailscale version | head -1)"
+fi
+remove_snap_if_installed tailscale
 
-log "Installing NetBird via snap..."
-snap install netbird 2>/dev/null || warn "Failed to install NetBird via snap"
+log "Installing NetBird via APT..."
+if ! command -v netbird &> /dev/null; then
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://pkgs.netbird.io/debian/public.key \
+    | gpg --dearmor --yes -o /etc/apt/keyrings/netbird.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/netbird.gpg] https://pkgs.netbird.io/debian stable main" \
+    | tee /etc/apt/sources.list.d/netbird.list > /dev/null
+  apt update
+  apt install -y netbird
+else
+  log "NetBird already installed: $(netbird version 2>/dev/null | head -1)"
+fi
+remove_snap_if_installed netbird
 
-log "Installing NordVPN via snap..."
-snap install nordvpn 2>/dev/null || warn "Failed to install NordVPN via snap"
+log "Installing NordVPN via APT..."
+if ! command -v nordvpn &> /dev/null || { command -v snap &> /dev/null && snap list nordvpn &> /dev/null; }; then
+  install_deb_from_url "nordvpn-release" \
+    "https://repo.nordvpn.com/deb/nordvpn/debian/pool/main/n/nordvpn-release/nordvpn-release_1.0.0_all.deb"
+  apt update
+  remove_snap_if_installed nordvpn
+  apt install -y nordvpn
+else
+  log "NordVPN already installed: $(nordvpn --version | head -1)"
+fi
 
 log "Installing OpenSSH Server..."
 apt install -y openssh-server
@@ -356,6 +440,11 @@ if [ -x "${CARGO_BIN}" ]; then
 
   log "Installing Just (task runner)..."
   sudo -u "${REAL_USER}" "${CARGO_BIN}" install just
+
+  log "Installing rust-analyzer (language server)..."
+  RUSTUP_BIN="${REAL_HOME}/.cargo/bin/rustup"
+  sudo -u "${REAL_USER}" "${RUSTUP_BIN}" component add rust-analyzer \
+    || warn "rust-analyzer install failed"
 else
   warn "Cargo not found at ${CARGO_BIN}, skipping Rust tools"
 fi
@@ -390,28 +479,39 @@ if ! grep -q "starship init bash" "${BASHRC}" 2>/dev/null; then
   chown "${REAL_USER}:${REAL_USER}" "${BASHRC}"
 fi
 
-# ===== OPTIONAL: DESKTOP APPLICATIONS (snap) =====
+# ===== OPTIONAL: SNAP APPLICATIONS =====
 echo ""
-echo "📱 Installing desktop applications (optional)..."
-warn "These require snap. Install manually if preferred:"
-warn "  - Discord: snap install discord"
-warn "  - Slack: snap install slack"
-warn "  - Spotify: snap install spotify"
-warn "  - Notion: snap install notion-snap"
+echo "📱 Installing snap applications (optional)..."
+warn "These remain installed via snap on this system:"
+warn "  - Notion: snap install notion-desktop"
 warn "  - NordPass: snap install nordpass"
-warn "  - SimpleScreenRecorder: apt install simplescreenrecorder"
 
 REPLY=""
-read -p "Install desktop applications via snap? (y/n) " -n 1 -r REPLY || true
+read -p "Install snap applications? (y/n) " -n 1 -r REPLY || true
 echo
 if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
-  log "Installing desktop apps..."
-  snap install discord 2>/dev/null || warn "Discord snap failed"
-  snap install slack 2>/dev/null || warn "Slack snap failed"
-  snap install spotify 2>/dev/null || warn "Spotify snap failed"
-  snap install notion-snap 2>/dev/null || warn "Notion snap failed"
+  log "Installing snap apps..."
+  snap install notion-desktop 2>/dev/null || warn "Notion snap failed"
   snap install nordpass 2>/dev/null || warn "NordPass snap failed"
 fi
+
+log "Installing Discord via vendor .deb..."
+if ! command -v discord &> /dev/null && ! dpkg -l discord &>/dev/null; then
+  install_deb_from_url "discord" "https://discord.com/api/download?platform=linux&format=deb"
+  disable_incompatible_discord_apparmor_profile
+else
+  log "Discord already installed"
+fi
+remove_snap_if_installed discord
+
+log "Installing Slack via vendor .deb..."
+if ! command -v slack &> /dev/null && ! dpkg -l slack-desktop &>/dev/null; then
+  install_deb_from_url "slack" \
+    "https://downloads.slack-edge.com/desktop-releases/linux/x64/4.49.89/slack-desktop-4.49.89-amd64.deb"
+else
+  log "Slack already installed"
+fi
+remove_snap_if_installed slack
 
 log "Installing SimpleScreenRecorder..."
 apt install -y simplescreenrecorder
