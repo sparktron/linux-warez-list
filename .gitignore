@@ -1,3 +1,4 @@
 installer-tui/target/
 installer-tui/software-inventory.json
-.claude/
+.claude/*
+!.claude/launch.json
