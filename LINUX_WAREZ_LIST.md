@@ -346,7 +346,7 @@
 - **What:** Cross-platform TUI system resource monitor
 - **Installed:** Yes (deb)
 - **Usage:** Monitor CPU per-core, memory, swap, disk I/O, network, and processes in one interactive terminal UI
-- **Install:** Download the `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom_*_amd64.deb`) and `sudo dpkg -i`
+- **Install:** Download the musl (statically-linked) `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom-musl_*_amd64.deb`) and `sudo apt-get install -y ./bottom-musl_*_amd64.deb`. The musl build has no `libc6` dependency, so it installs on Ubuntu 22.04 (glibc 2.35); the default gnu build pins `libc6 (>= 2.39)` and will break apt on jammy.
 - **Version Check:** `btm --version`
 - **Usage:** Launch with `btm`; press `?` for help
 
@@ -560,7 +560,7 @@
 - **What:** Team messaging and collaboration platform
 - **Installed:** Yes
 - **Usage:** Workplace communication, notifications
-- **Install:** Download Slack's vendor `.deb` from https://slack.com/
+- **Install:** `snap install slack`
 - **Usage:** Desktop application
 
 ### Spotify

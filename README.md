@@ -208,7 +208,7 @@ Package rows are colour-coded by install method:
 | Spotify | apt |
 | Obsidian | script |
 | Discord | script |
-| Slack | script |
+| Slack | snap |
 | SimpleScreenRecorder | apt |
 | VeraCrypt | apt |
 | NoMachine | script |

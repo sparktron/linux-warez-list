@@ -804,11 +804,16 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          zooming, process killing, and multiple layout presets. A modern, more readable \
          replacement for top and htop. Launch with `btm`.",
         InstallCmd::Script(
+            // Use the musl (statically-linked) .deb: it declares no libc6
+            // dependency, so it installs on any glibc. The default gnu build
+            // pins libc6 (>= 2.39), newer than Ubuntu 22.04 ships (2.35), which
+            // would half-unpack and leave apt in a broken state. apt-get installs
+            // the local .deb atomically so a failure never poisons apt.
             "BTM_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest \
-             | grep browser_download_url | grep 'bottom_.*_amd64\\.deb' | grep -v musl | head -1 \
+             | grep browser_download_url | grep 'bottom-musl_.*_amd64\\.deb' | head -1 \
              | cut -d'\"' -f4) \
              && curl -Lo /tmp/bottom.deb \"$BTM_URL\" \
-             && dpkg -i /tmp/bottom.deb \
+             && apt-get install -y /tmp/bottom.deb \
              && rm -f /tmp/bottom.deb",
         ),
         false,
@@ -1298,7 +1303,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              just-perfection-desktop@just-perfection",
         ),
         false,
@@ -1315,7 +1320,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              openweather-extension@jenslody.de",
         ),
         false,
@@ -1331,7 +1336,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              tophat@fflewddur.github.io",
         ),
         false,
@@ -1348,7 +1353,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              freon@UshakovVasilii_Github.yahoo.com",
         ),
         false,
@@ -1364,7 +1369,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              netspeedsimplified@prateekmedia.extension",
         ),
         false,
@@ -1380,7 +1385,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              audio-selector@harald65.simon.gmail.com",
         ),
         false,
@@ -1397,7 +1402,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              bluetooth-quick-connect@bjarosze.gmail.com",
         ),
         false,
@@ -1413,7 +1418,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
              sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
-             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" --yes install \
+             sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              simple-message@freddez",
         ),
         false,
@@ -1451,17 +1456,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Slack",
         "Team messaging and collaboration platform. Organized into channels by topic with \
          direct messaging, file sharing, video/audio huddles, and integrations with GitHub, \
-         Jira, PagerDuty, Google Calendar, and other dev tools. Installed from Slack's \
-         vendor .deb package so desktop integration and URL handlers are not constrained \
-         by snap confinement.",
-        InstallCmd::Script(
-            "curl -fL \
-             https://downloads.slack-edge.com/desktop-releases/linux/x64/4.49.89/slack-desktop-4.49.89-amd64.deb \
-             -o /tmp/slack.deb \
-             && apt install -y /tmp/slack.deb \
-             && (snap list slack >/dev/null 2>&1 && snap remove slack || true) \
-             && rm -f /tmp/slack.deb",
-        ),
+         Jira, PagerDuty, Google Calendar, and other dev tools. Installed via snap so it \
+         auto-updates and isn't pinned to a specific .deb version.",
+        InstallCmd::Snap("slack"),
         false,
         true,
     );
@@ -1497,13 +1494,17 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          responsiveness. Fetches the latest .deb directly from nomachine.com and installs \
          with dpkg. The nxserver service starts automatically on boot.",
         InstallCmd::Script(
-            "ARCH=$(dpkg --print-architecture) \
-             && NM_URL=$(curl -fsSL 'https://www.nomachine.com/download/linux&id=1' \
-             | grep -oP 'https://download\\.nomachine\\.com/download/[^\"]+\\.deb' \
-             | grep \"${ARCH}\" | head -1) \
+            // NoMachine moved its download flow to downloads.nomachine.com; the
+            // old www.nomachine.com/download/linux&id=1 page no longer embeds the
+            // .deb URL, so the previous scrape returned empty and the step failed
+            // with no output. Scrape the current page for the amd64 .deb (this repo
+            // targets x86-64 Ubuntu, so amd64 is hardcoded). apt-get installs the
+            // local .deb atomically so a failure never poisons apt.
+            "NM_URL=$(curl -fsSL 'https://downloads.nomachine.com/download/?id=1&platform=linux' \
+             | grep -oP 'https://[^\"]+/nomachine_[0-9][^\"]*_amd64\\.deb' | head -1) \
              && [ -n \"$NM_URL\" ] \
              && curl -fsSL \"$NM_URL\" -o /tmp/nomachine.deb \
-             && (dpkg -i /tmp/nomachine.deb || apt install -f -y) \
+             && apt-get install -y /tmp/nomachine.deb \
              && rm -f /tmp/nomachine.deb",
         ),
         false,
@@ -2553,7 +2554,6 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         "NetBird" => apt.contains("netbird"),
         "NordVPN" => apt.contains("nordvpn"),
         "Discord" => apt.contains("discord"),
-        "Slack" => apt.contains("slack-desktop"),
         n if n.starts_with("FiraCode") => sh_check("fc-list 2>/dev/null | grep -qi FiraCode"),
         n if n.starts_with("NoMachine") => sh_check("test -d /usr/NX"),
         n if n.starts_with("GRUB") => apt.contains("grub-customizer"),
@@ -2604,6 +2604,32 @@ fn check_all_installed(packages: &mut Vec<Package>) {
             pkg.selected = false;
         }
     }
+}
+
+/// Recover apt/dpkg from a broken state left by a failed install, so one bad
+/// package can't cascade into failing every later apt step.
+///
+/// A half-unpacked `.deb` whose dependencies can't be satisfied (e.g. one needing
+/// a newer libc than the system ships) leaves dpkg wedged: every subsequent
+/// `apt install` then aborts with "Unmet dependencies". This best-effort routine
+/// (1) configures whatever can be configured, (2) force-removes the half-installed
+/// offenders that apt itself can't fix, then (3) lets apt repair the remaining
+/// fixable dependencies. Every step is `|| true` — failures here are ignored so
+/// the install loop always continues.
+fn heal_apt() {
+    println!("\x1b[1;33m   -> repairing package state so the rest can continue...\x1b[0m");
+    // Field 1 of `dpkg -l` is the 2-char status code: 'ii' = installed OK.
+    // `^i[^i]` matches desired-install packages that are NOT fully installed
+    // (iU unpacked, iF half-configured, …) — exactly the ones that poison apt.
+    // 'rc'/'un' and the header lines are left alone. Such packages cannot be
+    // configured (their deps are unsatisfiable), so they are force-removed.
+    let heal = "dpkg --configure -a >/dev/null 2>&1 || true; \
+                broken=$(dpkg -l 2>/dev/null | awk '$1 ~ /^i[^i]/ {print $2}'); \
+                if [ -n \"$broken\" ]; then \
+                  dpkg --remove --force-remove-reinstreq $broken >/dev/null 2>&1 || true; \
+                fi; \
+                apt-get install -f -y >/dev/null 2>&1 || true";
+    let _ = Command::new("sh").args(["-c", heal]).status();
 }
 
 fn run_install(packages: Vec<Package>) {
@@ -2664,19 +2690,35 @@ fn run_install(packages: Vec<Package>) {
             InstallCmd::Snap(name) => Command::new("snap").args(["install", name]).status(),
         };
 
+        // Only apt/dpkg-touching steps can wedge the package database; cargo,
+        // pip and snap failures are self-contained, so don't waste a heal pass.
+        let touches_apt = matches!(pkg.cmd, InstallCmd::Apt(_) | InstallCmd::Script(_));
+
         match result {
             Ok(s) if s.success() => {
                 println!("{g}   [ok] {} installed successfully.{x}\n", pkg.name)
             }
-            Ok(s) => println!(
-                "{r}   [fail] {} exited with code {:?}.{x}\n",
-                pkg.name,
-                s.code()
-            ),
-            Err(e) => println!(
-                "{r}   [error] Could not launch installer for {}: {}.{x}\n",
-                pkg.name, e
-            ),
+            Ok(s) => {
+                println!(
+                    "{r}   [fail] {} exited with code {:?}.{x}",
+                    pkg.name,
+                    s.code()
+                );
+                if touches_apt {
+                    heal_apt();
+                }
+                println!();
+            }
+            Err(e) => {
+                println!(
+                    "{r}   [error] Could not launch installer for {}: {}.{x}",
+                    pkg.name, e
+                );
+                if touches_apt {
+                    heal_apt();
+                }
+                println!();
+            }
         }
     }
 

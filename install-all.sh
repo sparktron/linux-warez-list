@@ -66,6 +66,29 @@ disable_incompatible_discord_apparmor_profile() {
   fi
 }
 
+# heal_apt: recover apt/dpkg from a broken state so a single bad package can't
+# wedge every later apt step. A half-unpacked .deb with unsatisfiable deps (e.g.
+# one needing a newer libc than the system ships) leaves dpkg in a state where
+# every subsequent `apt install` aborts with "Unmet dependencies". This
+# configures what it can, force-removes the half-installed offenders apt itself
+# can't fix (status code starts with 'i' but isn't 'ii'), then lets apt repair
+# the rest. Every step is `|| true` so it never trips `set -e`. Run it at startup
+# to clear breakage left by a prior failed run, and in cleanup as a safety net.
+heal_apt() {
+  dpkg --configure -a >/dev/null 2>&1 || true
+  local broken
+  broken="$(dpkg -l 2>/dev/null | awk '$1 ~ /^i[^i]/ {print $2}')" || true
+  if [ -n "${broken}" ]; then
+    warn "Repairing broken package state: ${broken}"
+    dpkg --remove --force-remove-reinstreq ${broken} >/dev/null 2>&1 || true
+  fi
+  apt-get install -f -y >/dev/null 2>&1 || true
+}
+
+# Repair any pre-existing broken package state (e.g. left behind by an earlier
+# failed run) before we start, so the first apt operation doesn't inherit it.
+heal_apt
+
 # Update package list
 log "Updating package list..."
 apt update
@@ -286,16 +309,29 @@ else
 fi
 
 log "Installing bottom (btm) via .deb..."
+# Select the musl (statically-linked) build. Its .deb declares no libc6
+# dependency, so it installs on any glibc version. The default gnu build pins
+# libc6 (>= 2.39) -- newer than Ubuntu 22.04 ships (2.35). On jammy that .deb
+# half-unpacks, then `apt -f install` cannot satisfy the impossible glibc
+# requirement and leaves the package broken, which poisons every later apt
+# operation (this is exactly what failed in the field). musl avoids all of it
+# and is future-proof against further glibc bumps.
 BTM_DEB_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest \
-  | grep "browser_download_url" | grep "bottom_.*_amd64\.deb" | grep -v musl | head -1 \
+  | grep "browser_download_url" | grep "bottom-musl_.*_amd64\.deb" | head -1 \
   | cut -d'"' -f4)
 if [[ -n "${BTM_DEB_URL}" ]]; then
   curl -Lo /tmp/bottom.deb "${BTM_DEB_URL}"
-  dpkg -i /tmp/bottom.deb || apt install -f -y || warn "Failed to install bottom .deb"
+  # apt-get install of a local .deb resolves deps atomically: if it cannot, it
+  # aborts cleanly instead of leaving a half-unpacked package (unlike `dpkg -i`).
+  # On failure, remove any partial install so apt is never left broken.
+  if ! apt-get install -y /tmp/bottom.deb; then
+    warn "Failed to install bottom .deb; removing partial install to keep apt healthy"
+    dpkg --remove bottom 2>/dev/null || true
+  fi
   rm -f /tmp/bottom.deb
   remove_snap_if_installed bottom
 else
-  warn "Could not fetch bottom release URL -- install manually from https://github.com/ClementTsang/bottom/releases"
+  warn "Could not fetch bottom musl release URL -- install manually from https://github.com/ClementTsang/bottom/releases"
 fi
 
 # ===== CONTAINER & VIRTUALIZATION =====
@@ -504,14 +540,15 @@ else
 fi
 remove_snap_if_installed discord
 
-log "Installing Slack via vendor .deb..."
-if ! command -v slack &> /dev/null && ! dpkg -l slack-desktop &>/dev/null; then
-  install_deb_from_url "slack" \
-    "https://downloads.slack-edge.com/desktop-releases/linux/x64/4.49.89/slack-desktop-4.49.89-amd64.deb"
+log "Installing Slack via snap..."
+# Installed from snap (not the vendor .deb): the snap auto-updates and avoids
+# pinning a specific .deb version that goes stale. snapd is installed earlier in
+# this script.
+if command -v snap &> /dev/null && snap list slack &> /dev/null; then
+  log "Slack already installed (snap)"
 else
-  log "Slack already installed"
+  snap install slack || warn "Slack snap install failed"
 fi
-remove_snap_if_installed slack
 
 log "Installing SimpleScreenRecorder..."
 apt install -y simplescreenrecorder
@@ -577,12 +614,15 @@ fi
 
 log "Installing NoMachine..."
 if ! dpkg -l nomachine &>/dev/null; then
-  NM_URL=$(curl -fsSL 'https://www.nomachine.com/download/linux&id=1' 2>/dev/null \
-    | grep -oP 'https://download\.nomachine\.com/download/[^"]+\.deb' \
-    | grep "$(dpkg --print-architecture)" | head -1) || true
+  # NoMachine moved its download flow to downloads.nomachine.com; the old
+  # www.nomachine.com/download/linux&id=1 page no longer embeds the .deb URL.
+  # Scrape the current page for the amd64 .deb (x86-64 target). apt-get installs
+  # the local .deb atomically so a failure never poisons apt.
+  NM_URL=$(curl -fsSL 'https://downloads.nomachine.com/download/?id=1&platform=linux' 2>/dev/null \
+    | grep -oP 'https://[^"]+/nomachine_[0-9][^"]*_amd64\.deb' | head -1) || true
   if [ -n "${NM_URL:-}" ]; then
     curl -fsSL "$NM_URL" -o /tmp/nomachine.deb
-    dpkg -i /tmp/nomachine.deb || apt install -f -y
+    apt-get install -y /tmp/nomachine.deb || warn "NoMachine install failed"
     rm -f /tmp/nomachine.deb
   else
     warn "Could not determine NoMachine download URL -- visit https://www.nomachine.com/download"
@@ -594,6 +634,9 @@ fi
 # ===== CLEANUP =====
 echo ""
 echo "🧹 Cleaning up..."
+# Safety net: heal any broken state a .deb step may have left before autoremove,
+# so cleanup itself doesn't abort on unmet dependencies.
+heal_apt
 apt autoremove -y
 apt autoclean -y
 
