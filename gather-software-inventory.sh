@@ -49,7 +49,8 @@
 
   # Fonts
   echo '  "fonts": ['
-  find /usr/share/fonts -name "*.ttf" -o -name "*.otf" 2>/dev/null | xargs basename -a | sort -u | while read font; do
+  find /usr/share/fonts \( -name "*.ttf" -o -name "*.otf" \) -print0 2>/dev/null |
+    xargs -0 -r basename -a | sort -u | while read -r font; do
     echo "    \"$font\","
   done | sed '$ s/,$//'
   echo "  ],"
@@ -57,7 +58,8 @@
   # VSCode/Cursor extensions (if Cursor is installed)
   echo '  "editor_extensions": ['
   if [ -d ~/.config/Cursor/User/extensions ] || [ -d ~/.vscode/extensions ]; then
-    find ~/.config/Cursor/User/extensions ~/.vscode/extensions -maxdepth 1 -type d 2>/dev/null | xargs -I {} basename {} | grep -v "^extensions$" | while read ext; do
+    find ~/.config/Cursor/User/extensions ~/.vscode/extensions -maxdepth 1 -type d -print0 2>/dev/null |
+      xargs -0 -r -I {} basename {} | grep -v "^extensions$" | while read -r ext; do
       echo "    \"$ext\","
     done | sed '$ s/,$//'
   fi
@@ -65,7 +67,8 @@
 
   # Desktop applications (check common locations)
   echo '  "desktop_applications": ['
-  find /usr/share/applications ~/.local/share/applications -name "*.desktop" 2>/dev/null | xargs grep -h "^Name=" | cut -d= -f2 | sort -u | while read app; do
+  find /usr/share/applications ~/.local/share/applications -name "*.desktop" -print0 2>/dev/null |
+    xargs -0 -r grep -h "^Name=" | cut -d= -f2 | sort -u | while read -r app; do
     echo "    \"$app\","
   done | sed '$ s/,$//'
   echo "  ]"

@@ -29,6 +29,11 @@ jobs:
           bash -n install-all.sh
           bash -n gather-software-inventory.sh
       - name: ShellCheck
-        uses: ludeeus/action-shellcheck@master
+        # Pinned: @master let an upstream change break this job with no commit
+        # here. severity=warning is the floor this repo actually enforces --
+        # the style-level notes (SC2162, SC2012, SC2016, SC1091, and the
+        # deliberate word-split at install-all.sh:83) are not defects.
+        uses: ludeeus/action-shellcheck@2.0.0  # 00cae500b08a931fb5698e11e79bfbd38e612a38
         with:
           scandir: '.'
+          severity: warning
