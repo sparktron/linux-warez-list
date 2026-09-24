@@ -1,6 +1,6 @@
 # linux-warez-list
 
-> Complete Ubuntu dev environment — 108 packages, extensions, and tools across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
+> Complete Ubuntu dev environment — 103 packages, extensions, and tools across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
 
 ---
 
@@ -26,7 +26,7 @@ tab-separated: `status`, `name`, `detail`, where `status` is `ok`, `fail`,
 
 ## Interactive Installer
 
-A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 108 packages, extensions, and tools by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 103 packages, extensions, and tools by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
 
 ### Package selection
 
@@ -65,7 +65,7 @@ Package rows are colour-coded by install method:
 
 ---
 
-## Packages (84 total)
+## Packages (103 total)
 
 ### System Tools
 | Package | Method |
@@ -73,7 +73,8 @@ Package rows are colour-coded by install method:
 | build-essential | apt |
 | git | apt |
 | gh (GitHub CLI) | script |
-| linux-lowlatency (kernel) | apt |
+| Ubuntu 22.04 lowlatency kernel | apt |
+| Ubuntu 24.04 lowlatency kernel | apt |
 | snapd | script |
 | curl | apt |
 | wget | apt |

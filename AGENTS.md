@@ -124,7 +124,7 @@ REAL_USER / REAL_HOME detection
 apt update
 
 Sections (in order):
-  SYSTEM PACKAGES   -- build-essential, git, GitHub CLI, linux-lowlatency
+  SYSTEM PACKAGES   -- build-essential, git, GitHub CLI, kernel (prompted)
   LANGUAGES         -- Python 3.10, Node 20, Rust (rustup), GCC, Clang 14
   CLI TOOLS         -- ripgrep, fd, cmake, bat, ffmpeg, fzf, etc.
   CONTAINERS        -- Docker
@@ -168,7 +168,7 @@ packages have version pins that must not conflict:
 | SQLAlchemy==2.0.19 | Mythos `requirements.txt` pin | Pip install in both |
 | requests==2.31.0 | Mythos `requirements.txt` pin | Pip install in both |
 | FFmpeg from apt only (4.4.x) | PPA/snap versions ship different libavcodec SO versions | Description notes |
-| linux-lowlatency kernel | Required on production vessels | Description notes |
+| Kernel release | Production vessels need lowlatency. Install `linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`. Do not install unversioned `linux-lowlatency` (6.8 GA on 24.04). The headless script prompts for 22.04 or 24.04. | Both installers |
 
 When adding or updating Python packages, check `~/mythos/third_party/rules_python/requirements.txt`
 for version conflicts.

@@ -46,13 +46,13 @@
 - **Usage:** Service management, system initialization
 - **Install:** Included in base Ubuntu
 
-### linux-lowlatency (Kernel)
-- **What:** Ubuntu's low-latency kernel flavor with reduced scheduling latency
+### Linux kernel (Ubuntu 22.04 or 24.04)
+- **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** Real-time audio production, low-latency workloads, interactive desktop; uses 1000 Hz timer and voluntary preemption
-- **Install:** `sudo apt install linux-lowlatency`
-- **Note:** Reboot required after installation for new kernel to take effect
-- **Version Check:** `uname -r` (after reboot, should show `-lowlatency` suffix)
+- **Usage:** `install-all.sh` asks you to choose Ubuntu 22.04 or 24.04. Enter skips the kernel. 22.04 installs `linux-lowlatency-hwe-22.04`. 24.04 installs `linux-lowlatency-hwe-24.04` (7.0 series). The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel.
+- **Install:** Prompt in `install-all.sh`, or the matching TUI entry
+- **Note:** Reboot required after installation
+- **Version Check:** `uname -r`
 
 ### snapd
 - **What:** Snap package manager daemon and core runtime

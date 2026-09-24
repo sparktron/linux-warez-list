@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0] — 2026-09-23
+
+### Kernel
+
+#### Installer asks for Ubuntu 22.04 or 24.04 before installing a kernel
+
+**Motivation:** `apt install linux-lowlatency` on Ubuntu 24.04 pulls the GA 6.8
+lowlatency kernel. On a machine already running the 7.0 HWE generic kernel that
+replaces a newer kernel with an older one.
+
+**What it does:** `install-all.sh` asks you to choose Ubuntu 22.04 or 24.04,
+then installs `linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`.
+Enter skips the kernel. The TUI has one optional package for each release.
+
+---
+
 ## [0.9.6] — 2026-09-23
 
 ### Reliability

@@ -226,6 +226,48 @@ heal_apt() {
   apt-get install -f -y >/dev/null 2>&1 || true
 }
 
+# Install the low-latency HWE kernel for Ubuntu 22.04 or 24.04. The unversioned
+# linux-lowlatency metapackage tracks the GA kernel (6.8 on 24.04), which is
+# older than a current HWE desktop kernel. The release-specific metapackage
+# keeps the kernel on that Ubuntu release's HWE series.
+choose_and_install_kernel() {
+  local -a releases=("22.04" "24.04")
+  local rel pkg cand i choice selected
+  log "Choose an Ubuntu release for the low-latency kernel (running: $(uname -r))..."
+  echo "  0) Skip kernel installation"
+  i=1
+  for rel in "${releases[@]}"; do
+    pkg="linux-lowlatency-hwe-${rel}"
+    cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -z "$cand" || "$cand" == "(none)" ]]; then
+      cand="not in apt"
+    fi
+    printf '  %d) Ubuntu %s (%s, %s)\n' "$i" "$rel" "$pkg" "$cand"
+    i=$((i + 1))
+  done
+  read -r -p "Select 22.04 or 24.04 [0]: " choice || true
+  choice="${choice:-0}"
+  if [[ "$choice" == "0" ]]; then
+    warn "Skipping kernel installation"
+    return 0
+  fi
+  if [[ "$choice" != "1" && "$choice" != "2" ]]; then
+    warn "Invalid kernel choice '${choice}', skipping"
+    return 0
+  fi
+  selected="${releases[$((choice - 1))]}"
+  pkg="linux-lowlatency-hwe-${selected}"
+  cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  if [[ -z "$cand" || "$cand" == "(none)" ]]; then
+    warn "Could not install ${pkg}: package is not in apt"
+    return 0
+  fi
+  log "Installing kernel ${pkg}..."
+  apt install -y "$pkg"
+  warn "Reboot required before the Ubuntu ${selected} low-latency kernel becomes the running kernel"
+  warn "After reboot, verify with: uname -r"
+}
+
 # Repair any pre-existing broken package state (e.g. left behind by an earlier
 # failed run) before we start, so the first apt operation doesn't inherit it.
 init_install_log
@@ -245,10 +287,7 @@ apt install -y build-essential
 log "Installing Git..."
 apt install -y git
 
-log "Installing low-latency kernel..."
-apt install -y linux-lowlatency
-warn "Reboot required after installation for low-latency kernel to take effect"
-warn "After reboot, verify with: uname -r (should show *-lowlatency)"
+choose_and_install_kernel
 
 log "Installing snapd (required for snap packages)..."
 apt install -y snapd

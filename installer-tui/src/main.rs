@@ -313,16 +313,24 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "linux-lowlatency  (kernel)",
-        "Ubuntu's low-latency kernel flavor, tuned to minimize scheduling latency for \
-         real-time workloads and interactive use. Replaces the default generic kernel with \
-         one that uses a 1000 Hz timer, voluntary preemption, and reduced latency \
-         optimizations throughout the I/O and CPU scheduler paths. Required on Mythos \
-         production vessels for real-time control loops and sensor processing — the \
-         sys_monitor_service checks the running kernel version against the configured \
-         instance config. Also recommended for audio production and video editing. \
-         A reboot is required after installation. Verify with: uname -r",
-        InstallCmd::Apt(&["linux-lowlatency"]),
+        "Ubuntu 22.04 lowlatency kernel",
+        "Low-latency hardware-enablement kernel for Ubuntu 22.04 \
+         (linux-lowlatency-hwe-22.04). This is the kernel series Mythos production \
+         vessels use. It is not the unversioned linux-lowlatency package, which on \
+         Ubuntu 24.04 tracks the older 6.8 GA kernel. A reboot is required. \
+         Verify with: uname -r",
+        InstallCmd::Apt(&["linux-lowlatency-hwe-22.04"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Ubuntu 24.04 lowlatency kernel",
+        "Low-latency hardware-enablement kernel for Ubuntu 24.04 \
+         (linux-lowlatency-hwe-24.04). On 24.04 this tracks the 7.0 series, matching \
+         a current HWE desktop instead of the 6.8 GA kernel from unversioned \
+         linux-lowlatency. A reboot is required. Verify with: uname -r",
+        InstallCmd::Apt(&["linux-lowlatency-hwe-24.04"]),
         false,
         true,
     );
