@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.12.2] — 2026-09-24
+
+### Categories
+
+#### Packages sit in the category that matches what they are
+
+**Motivation:** Several entries were grouped by install method. Spotify was under snaps but installs from apt. Starship, direnv, and hstr were not with the shell. GRUB Customizer was with desktop apps. VeraCrypt was not with security tools. rust-analyzer and Just were in a cargo-only category.
+
+**What it does:** Spotify moves to Desktop Applications. GRUB Customizer moves to System Tools. VeraCrypt moves to Security & Networking. direnv, hstr, and Starship move to Terminal & Shell. Just moves to CLI Tools. rust-analyzer moves next to Rust. The Rust Tools category is removed.
+
+---
+
+## [0.12.1] — 2026-09-24
+
+### Install order
+
+#### Claude Code and the ChatGPT CLI always install first
+
+**Motivation:** Those two CLIs are the tools the rest of the environment is used with, so a partial run should not leave them for the end or skip them.
+
+**What it does:** Both installers install Claude Code (`npm install -g @anthropic-ai/claude-code`) and the Codex CLI before the other packages. In the TUI they stay selected; Space and "select none" do not turn them off. The headless script installs them as soon as npm is available.
+
+---
+
+## [0.12.0] — 2026-09-24
+
+### Packages
+
+#### AI Tools section holds Cursor, Claude Desktop, and ChatGPT
+
+**Motivation:** Claude Desktop and ChatGPT desktop were listed under desktop apps, and Cursor was only a post-install reminder.
+
+**What it does:** The TUI category is renamed from "Claude & AI Tools" to "AI Tools". Cursor, Claude Desktop, and ChatGPT desktop are entries in that category, followed by the Claude Code and Codex CLIs. Cursor installs from the golden Linux `.deb` channel. The headless script installs Cursor in the same stretch as Claude and ChatGPT.
+
+---
+
+## [0.11.0] — 2026-09-24
+
+### Packages
+
+#### ChatGPT desktop and Codex CLI
+
+**Motivation:** Claude desktop and Claude Code were already optional installs. ChatGPT now has an official Linux desktop preview and a standalone CLI.
+
+**What it does:** Both installers can install the ChatGPT desktop `.deb` (`chatgpt_amd64.deb` or `chatgpt_arm64.deb` from OpenAI's package host) and the Codex CLI via `https://chatgpt.com/codex/install.sh`, which places `codex` in the invoking user's `~/.local/bin`. Neither is selected by default.
+
+---
+
+## [0.10.1] — 2026-09-23
+
+### Fixes
+
+#### Apt installs no longer abort on an expired Spotify key, and three broken package installs were updated
+
+**Motivation:** GRUB Customizer, Google Chrome, and Signal each ran `apt update`
+and exited 100 because `repository.spotify.com` was signed with a key apt does
+not have (`NO_PUBKEY 5384CE82BA52C83A`). Obsidian's "latest" GitHub release is a
+mobile APK, so the `.deb` URL was empty and curl rejected it. Claude Desktop's
+old aaddrick key URL returns 404. `jcodemunch-mcp` called `pip3`, which is not
+installed on Ubuntu 24.04.
+
+**What it does:** When a Spotify apt source is present, both installers refresh
+it to `pubkey_5384CE82BA52C83A` before `apt update`. Spotify's own install
+command writes that key. Obsidian searches recent releases for an `amd64.deb`.
+Claude Desktop installs from Anthropic's apt repository. `jcodemunch-mcp`
+installs `python3-pip` and then uses `python3 -m pip`.
+
+---
+
 ## [0.10.0] — 2026-09-23
 
 ### Kernel

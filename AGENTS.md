@@ -129,9 +129,8 @@ Sections (in order):
   CLI TOOLS         -- ripgrep, fd, cmake, bat, ffmpeg, fzf, etc.
   CONTAINERS        -- Docker
   SECURITY          -- nmap, netcat, aircrack-ng, wifite, Tailscale, NetBird, NordVPN
-  TERMINAL          -- bash-completion, GNOME Terminal
+  TERMINAL          -- bash-completion, GNOME Terminal, tmux, starship
   PYTHON PACKAGES   -- pytest, SQLAlchemy==2.0.19, requests==2.31.0, etc.
-  RUST TOOLS        -- starship, just (via cargo, as REAL_USER)
   FONTS             -- liberation, dejavu, FiraCode Nerd Font (manual note)
   SHELL CONFIG      -- direnv + starship hooks in ~/.bashrc
   SNAP APPS         -- interactive prompt, then Discord/Slack/Spotify/Notion/NordPass
