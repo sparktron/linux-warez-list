@@ -187,6 +187,15 @@ remove_snap_if_installed() {
   fi
 }
 
+remove_deb_if_installed() {
+  local pkg_name="$1"
+
+  if dpkg -s "${pkg_name}" &> /dev/null; then
+    log "Removing leftover ${pkg_name} .deb..."
+    apt-get remove -y "${pkg_name}" || warn "Could not remove ${pkg_name}"
+  fi
+}
+
 install_deb_from_url() {
   local app_name="$1"
   local url="$2"
@@ -226,45 +235,47 @@ heal_apt() {
   apt-get install -f -y >/dev/null 2>&1 || true
 }
 
-# Install the low-latency HWE kernel for Ubuntu 22.04 or 24.04. The unversioned
+# Install the low-latency HWE kernel that matches this machine's Ubuntu release.
+# 22.04 gets linux-lowlatency-hwe-22.04; 24.04 gets linux-lowlatency-hwe-24.04.
+# The other release's package is never installed. The unversioned
 # linux-lowlatency metapackage tracks the GA kernel (6.8 on 24.04), which is
-# older than a current HWE desktop kernel. The release-specific metapackage
-# keeps the kernel on that Ubuntu release's HWE series.
-choose_and_install_kernel() {
-  local -a releases=("22.04" "24.04")
-  local rel pkg cand i choice selected
-  log "Choose an Ubuntu release for the low-latency kernel (running: $(uname -r))..."
-  echo "  0) Skip kernel installation"
-  i=1
-  for rel in "${releases[@]}"; do
-    pkg="linux-lowlatency-hwe-${rel}"
-    cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
-    if [[ -z "$cand" || "$cand" == "(none)" ]]; then
-      cand="not in apt"
-    fi
-    printf '  %d) Ubuntu %s (%s, %s)\n' "$i" "$rel" "$pkg" "$cand"
-    i=$((i + 1))
-  done
-  read -r -p "Select 22.04 or 24.04 [0]: " choice || true
-  choice="${choice:-0}"
-  if [[ "$choice" == "0" ]]; then
-    warn "Skipping kernel installation"
+# older than a current HWE desktop kernel.
+install_matching_lowlatency_kernel() {
+  local version_id pkg other cand
+  version_id="$(awk -F= '$1=="VERSION_ID" {gsub(/"/,"",$2); print $2; exit}' /etc/os-release 2>/dev/null || true)"
+  case "${version_id}" in
+    22.04)
+      pkg="linux-lowlatency-hwe-22.04"
+      other="linux-lowlatency-hwe-24.04"
+      ;;
+    24.04)
+      pkg="linux-lowlatency-hwe-24.04"
+      other="linux-lowlatency-hwe-22.04"
+      ;;
+    *)
+      warn "Skipping low-latency kernel: Ubuntu ${version_id:-unknown} is not 22.04 or 24.04"
+      return 0
+      ;;
+  esac
+
+  if dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q '^install ok installed$'; then
+    log "Low-latency kernel ${pkg} is already installed for Ubuntu ${version_id}"
     return 0
   fi
-  if [[ "$choice" != "1" && "$choice" != "2" ]]; then
-    warn "Invalid kernel choice '${choice}', skipping"
-    return 0
+
+  if dpkg-query -W -f='${Status}' "${other}" 2>/dev/null | grep -q '^install ok installed$'; then
+    warn "${other} is already installed; leaving it in place and installing only ${pkg}"
   fi
-  selected="${releases[$((choice - 1))]}"
-  pkg="linux-lowlatency-hwe-${selected}"
-  cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
-  if [[ -z "$cand" || "$cand" == "(none)" ]]; then
+
+  cand="$(apt-cache policy "${pkg}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  if [[ -z "${cand}" || "${cand}" == "(none)" ]]; then
     warn "Could not install ${pkg}: package is not in apt"
     return 0
   fi
-  log "Installing kernel ${pkg}..."
-  apt install -y "$pkg"
-  warn "Reboot required before the Ubuntu ${selected} low-latency kernel becomes the running kernel"
+
+  log "Installing low-latency kernel ${pkg} for Ubuntu ${version_id} (running: $(uname -r))..."
+  apt install -y "${pkg}"
+  warn "Reboot required before the Ubuntu ${version_id} low-latency kernel becomes the running kernel"
   warn "After reboot, verify with: uname -r"
 }
 
@@ -303,7 +314,7 @@ apt install -y build-essential
 log "Installing Git..."
 apt install -y git
 
-choose_and_install_kernel
+install_matching_lowlatency_kernel
 
 log "Installing snapd (required for snap packages)..."
 apt install -y snapd
@@ -338,7 +349,12 @@ echo ""
 echo "🔧 Installing programming languages..."
 
 log "Installing Python 3.10 and dev tools..."
-apt install -y python3.10 python3.10-venv python3.10-dev python3-pip
+# Ubuntu 24.04 dropped Python 3.10 from the archive. deadsnakes still publishes it.
+if ! apt-cache show python3.10 >/dev/null 2>&1; then
+  add-apt-repository -y ppa:deadsnakes/ppa
+  apt-get update
+fi
+apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip python3-venv
 
 log "Installing GCC and development headers..."
 apt install -y gcc g++ gdb
@@ -350,7 +366,28 @@ apt install -y gcc g++ gdb
 # break the Mythos .bazelrc (CC=clang). We also install clang-format-12
 # explicitly since Mythos formatting depends on it.
 log "Installing Clang 14 and LLVM..."
-apt install -y clang clang-format-12 llvm llvm-dev
+# 22.04: the clang metapackage is Clang 14 and clang-format-12 is in the archive.
+# 24.04: the clang metapackage is Clang 18 and clang-format-12 is gone, so install
+# clang-14 from Ubuntu and the 22.04 clang-format-12 packages directly.
+if apt-cache show clang-format-12 >/dev/null 2>&1; then
+  apt-get install -y clang clang-format-12 llvm llvm-dev
+else
+  apt-get install -y clang-14 llvm-14 llvm-14-dev
+  arch="$(dpkg --print-architecture)"
+  tmp="$(mktemp -d)"
+  base="http://archive.ubuntu.com/ubuntu/pool/universe/l/llvm-toolchain-12"
+  for deb in \
+    "libllvm12_12.0.1-19ubuntu3_${arch}.deb" \
+    "libclang-cpp12_12.0.1-19ubuntu3_${arch}.deb" \
+    "clang-format-12_12.0.1-19ubuntu3_${arch}.deb"
+  do
+    curl -fsSL -o "${tmp}/${deb}" "${base}/${deb}"
+  done
+  apt-get install -y "${tmp}"/*.deb
+  rm -rf "${tmp}"
+  update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 140
+  update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 140
+fi
 
 # ===== NODE.JS (if not already installed) =====
 if ! command -v node &> /dev/null; then
@@ -408,6 +445,25 @@ apt install -y direnv
 
 log "Installing jq..."
 apt install -y jq
+
+# Ubuntu 24.04 removed the apt package awscli (deprecated v1). Install AWS CLI v2
+# from the official bundle. /usr/local/bin comes before /usr/bin, so this wins
+# over a leftover v1 binary if one is present.
+if command -v aws >/dev/null 2>&1 && aws --version 2>&1 | grep -q 'aws-cli/2'; then
+  log "AWS CLI v2 already installed: $(aws --version 2>&1)"
+else
+  log "Installing AWS CLI v2..."
+  apt install -y unzip
+  curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+  rm -rf /tmp/aws
+  unzip -q -o /tmp/awscliv2.zip -d /tmp
+  if [ -d /usr/local/aws-cli/v2 ]; then
+    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  else
+    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+  fi
+  rm -rf /tmp/aws /tmp/awscliv2.zip
+fi
 
 log "Installing SQLite3..."
 apt install -y sqlite3
@@ -654,10 +710,10 @@ echo "🐍 Installing Python packages..."
 # We pin these to Mythos-compatible versions to avoid surprises.
 
 log "Upgrading pip..."
-python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade pip --break-system-packages
 
 log "Installing Python packages (system-wide)..."
-python3 -m pip install \
+python3 -m pip install --break-system-packages \
   pytest \
   pytest-mock \
   pytest-cov \
@@ -755,12 +811,18 @@ if command -v snap &> /dev/null && snap list slack &> /dev/null; then
 else
   snap install slack || warn "Slack snap install failed"
 fi
+# The pre-0.9.2 installer left slack-desktop (the vendor .deb) in place.
+# Both publish a Slack .desktop file, so the app menu shows Slack twice.
+remove_deb_if_installed slack-desktop
 
 log "Installing SimpleScreenRecorder..."
 apt install -y simplescreenrecorder
 
 log "Installing VeraCrypt..."
-apt install -y veracrypt 2>/dev/null || warn "VeraCrypt not in default repos"
+add-apt-repository -y ppa:unit193/encryption \
+  && apt-get update \
+  && apt-get install -y veracrypt \
+  || warn "VeraCrypt install failed"
 
 log "Installing GNOME Tweaks..."
 apt install -y gnome-tweaks
@@ -869,8 +931,8 @@ if ! dpkg -l nomachine &>/dev/null; then
   # www.nomachine.com/download/linux&id=1 page no longer embeds the .deb URL.
   # Scrape the current page for the amd64 .deb (x86-64 target). apt-get installs
   # the local .deb atomically so a failure never poisons apt.
-  NM_URL=$(curl -fsSL 'https://downloads.nomachine.com/download/?id=1&platform=linux' 2>/dev/null \
-    | grep -oP 'https://[^"]+/nomachine_[0-9][^"]*_amd64\.deb' | head -1) || true
+  NM_URL=$(curl -fsSL 'https://download.nomachine.com/download/?id=43&platform=linux' 2>/dev/null \
+    | grep -oP 'https://[^" ]+/nomachine[^" ]*_amd64\.deb' | head -1) || true
   if [ -n "${NM_URL:-}" ]; then
     curl -fsSL "$NM_URL" -o /tmp/nomachine.deb
     apt-get install -y /tmp/nomachine.deb || warn "NoMachine install failed"
@@ -904,6 +966,7 @@ declare -a VERIFY_CMDS=(
   "git --version"
   "rg --version"
   "jq --version"
+  "aws --version"
   "cmake --version"
   "docker --version"
   "clang --version"

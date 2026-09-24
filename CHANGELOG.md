@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.13.0] — 2026-09-24
+
+### Packages
+
+#### AWS CLI v2
+
+**Motivation:** Ubuntu 24.04 removed the apt package `awscli` (the deprecated v1 client), so `apt-get install awscli` exits 100 with no installation candidate.
+
+**What it does:** Both installers install AWS CLI v2 from the official Linux x86-64 bundle into `/usr/local/bin/aws`. An existing v2 install is left in place. A partial v2 tree is updated in place.
+
+---
+
+## [0.12.5] — 2026-09-24
+
+### Fixes
+
+#### Slack no longer stays installed as both the snap and the old `.deb`
+
+**Motivation:** Switching Slack to snap in 0.9.2 left the vendor `slack-desktop` package in place. Both publish a desktop file named Slack, so the app menu shows Slack twice.
+
+**What it does:** After `snap install slack`, the installer removes `slack-desktop` when that package is still installed. The snap is unchanged.
+
+---
+
+## [0.12.4] — 2026-09-24
+
+### Fixes
+
+#### Ubuntu 24.04 installs no longer fail on Python 3.10, Clang 14, VeraCrypt, pip, GNOME extensions, or NoMachine
+
+**Motivation:** A 0.12.2 TUI run on Ubuntu 24.04 exited 100 for Python 3.10, Clang, and VeraCrypt because those packages are not in the noble archive. Every pip package then failed to launch (`pip3` missing, and Ubuntu 24.04 blocks system pip). GNOME extensions failed because `gnome-extensions-cli` never installed. NoMachine's download page now publishes `nomachine-personal-edition_*_amd64.deb`, which the old scrape did not match.
+
+**What it does:** Python 3.10 comes from the deadsnakes PPA when apt does not have it, and `python3-pip` is installed with it. Clang 14 is installed as `clang-14` on 24.04, and `clang-format-12` is installed from the Ubuntu 22.04 packages. VeraCrypt comes from the unit193/encryption PPA. pip installs use `python3 -m pip install --break-system-packages`. GNOME extensions install `gnome-extensions-cli` the same way. NoMachine scrapes `download.nomachine.com` for the personal-edition `.deb`.
+
+---
+
+## [0.12.3] — 2026-09-24
+
+### Kernel
+
+#### Headless install uses the low-latency kernel for this Ubuntu release
+
+**Motivation:** `install-all.sh` asked you to choose 22.04 or 24.04, so a run could install `linux-lowlatency-hwe-22.04` on a 24.04 machine (or the reverse).
+
+**What it does:** The script reads `VERSION_ID` from `/etc/os-release`. Ubuntu 22.04 installs `linux-lowlatency-hwe-22.04`. Ubuntu 24.04 installs `linux-lowlatency-hwe-24.04`. Any other release skips the kernel. The other release's package is not installed. The TUI still lists both kernels as optional entries.
+
+---
+
 ## [0.12.2] — 2026-09-24
 
 ### Categories

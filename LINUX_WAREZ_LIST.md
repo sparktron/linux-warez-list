@@ -49,8 +49,8 @@
 ### Linux kernel (Ubuntu 22.04 or 24.04)
 - **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** `install-all.sh` asks you to choose Ubuntu 22.04 or 24.04. Enter skips the kernel. 22.04 installs `linux-lowlatency-hwe-22.04`. 24.04 installs `linux-lowlatency-hwe-24.04` (7.0 series). The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel.
-- **Install:** Prompt in `install-all.sh`, or the matching TUI entry
+- **Usage:** `install-all.sh` reads `VERSION_ID` from `/etc/os-release` and installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04 (7.0 series). It does not install the other release's kernel. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. The TUI still lists both kernels as optional entries — select the one that matches the machine.
+- **Install:** Automatic in `install-all.sh` for the running Ubuntu release, or the matching TUI entry
 - **Note:** Reboot required after installation
 - **Version Check:** `uname -r`
 
@@ -86,7 +86,7 @@
 - **What:** Python programming language, version 3.10.12
 - **Installed:** Yes (`/usr/bin/python3`)
 - **Usage:** Primary development language for CLI tools, scripts, backends
-- **Install:** `sudo apt install python3.10 python3.10-venv python3.10-dev`
+- **Install:** `sudo apt install python3.10 python3.10-venv python3.10-dev python3-pip` (on Ubuntu 24.04, add `ppa:deadsnakes/ppa` first)
 - **Version Check:** `python3 --version`
 - **Package Manager:** pip (`python3 -m pip`)
 
@@ -129,7 +129,7 @@
 - **What:** C/C++ compiler frontend, alternative to GCC with better diagnostics
 - **Installed:** Yes
 - **Usage:** Alternative compiler, static analysis, better error messages
-- **Install:** `sudo apt install clang llvm`
+- **Install:** `sudo apt install clang clang-format-12 llvm` on Ubuntu 22.04. On 24.04, `sudo apt install clang-14 llvm-14` and install `clang-format-12` from the Ubuntu 22.04 llvm-toolchain-12 packages.
 - **Version Check:** `clang --version`
 
 ---
@@ -183,6 +183,14 @@
 - **Install:** `sudo apt install jq`
 - **Version Check:** `jq --version`
 - **Usage Example:** `curl api.example.com | jq '.data[] | select(.status=="active")'`
+
+### AWS CLI (aws)
+- **What:** Official AWS command-line interface, version 2
+- **Installed:** No (opt-in)
+- **Usage:** S3, EC2, IAM, and the rest of the AWS API from the terminal
+- **Install:** Official v2 bundle into `/usr/local/bin/aws`. Ubuntu 24.04 has no apt candidate for `awscli` (deprecated v1).
+- **Version Check:** `aws --version`
+- **Usage Example:** `aws s3 ls` or `aws sts get-caller-identity`
 
 ### SQLite3
 - **What:** Embedded SQL database engine
@@ -527,7 +535,7 @@
 - **What:** Disk encryption software, successor to TrueCrypt
 - **Installed:** Yes
 - **Usage:** Encrypt sensitive files and volumes
-- **Install:** `sudo apt install veracrypt` or download from https://www.veracrypt.fr/
+- **Install:** `sudo add-apt-repository -y ppa:unit193/encryption && sudo apt install veracrypt`
 - **Version Check:** `veracrypt --text --help | head -1`
 
 ### NordPass
@@ -552,7 +560,7 @@
 - **What:** Team messaging and collaboration platform
 - **Installed:** Yes
 - **Usage:** Workplace communication, notifications
-- **Install:** `snap install slack`
+- **Install:** `snap install slack`, then `sudo apt-get remove -y slack-desktop` if the old vendor .deb is still installed
 - **Usage:** Desktop application
 
 ### Spotify
@@ -580,7 +588,7 @@
 - **What:** High-performance remote desktop solution using the NX protocol
 - **Installed:** Optional
 - **Usage:** Remote desktop access with near-native responsiveness over LAN/WAN; supports multi-session, file transfer, audio/video streaming, USB forwarding
-- **Install:** Download latest `.deb` from https://www.nomachine.com/download and `sudo dpkg -i nomachine_*.deb`
+- **Install:** Download the current `nomachine-personal-edition_*_amd64.deb` from https://download.nomachine.com/download/?id=43&platform=linux and `sudo apt install ./nomachine-personal-edition_*_amd64.deb`
 - **Version Check:** `nxserver --version`
 - **Note:** `nxserver` service starts automatically on boot; connect via NoMachine client on any OS
 

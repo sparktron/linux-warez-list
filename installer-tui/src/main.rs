@@ -415,13 +415,16 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Python 3.10 interpreter with pip (package manager) and venv (virtual environments). \
          Python is the go-to language for scripting, automation, data science, machine learning, \
          and web backends (Flask, FastAPI, Django). venv lets you create isolated per-project \
-         environments so package versions never conflict.",
-        InstallCmd::Apt(&[
-            "python3.10",
-            "python3.10-venv",
-            "python3.10-dev",
-            "python3-pip",
-        ]),
+         environments so package versions never conflict. On Ubuntu 24.04, Python 3.10 \
+         comes from the deadsnakes PPA because it is not in the default archive. \
+         python3-pip is always installed so later pip packages can run.",
+        InstallCmd::Script(
+            "if ! apt-cache show python3.10 >/dev/null 2>&1; then \
+               add-apt-repository -y ppa:deadsnakes/ppa && apt-get update; \
+             fi \
+             && apt-get install -y python3.10 python3.10-venv python3.10-dev \
+                  python3-pip python3-venv",
+        ),
         false,
         true,
     );
@@ -519,8 +522,29 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          (memory error detection), and UBSan (undefined behavior detector). Includes \
          clang-format-12 which is required by the Mythos AV stack for code formatting. \
          On Ubuntu 22.04 the bare 'clang' metapackage resolves to Clang 14, which is the \
-         version Mythos pins. Do NOT install a different clang version (e.g. clang-15/16).",
-        InstallCmd::Apt(&["clang", "clang-format-12", "llvm", "llvm-dev"]),
+         version Mythos pins. Ubuntu 24.04's clang metapackage is Clang 18 and its archive \
+         has no clang-format-12, so this installs clang-14 from Ubuntu and clang-format-12 \
+         from the 22.04 packages. Do NOT install a different clang as /usr/bin/clang.",
+        InstallCmd::Script(
+            "if apt-cache show clang-format-12 >/dev/null 2>&1; then \
+               apt-get install -y clang clang-format-12 llvm llvm-dev; \
+             else \
+               apt-get install -y clang-14 llvm-14 llvm-14-dev \
+               && arch=$(dpkg --print-architecture) \
+               && tmp=$(mktemp -d) \
+               && base=http://archive.ubuntu.com/ubuntu/pool/universe/l/llvm-toolchain-12 \
+               && for deb in \
+                    libllvm12_12.0.1-19ubuntu3_${arch}.deb \
+                    libclang-cpp12_12.0.1-19ubuntu3_${arch}.deb \
+                    clang-format-12_12.0.1-19ubuntu3_${arch}.deb; do \
+                    curl -fsSL -o \"$tmp/$deb\" \"$base/$deb\"; \
+                  done \
+               && apt-get install -y \"$tmp\"/*.deb \
+               && rm -rf \"$tmp\" \
+               && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 140 \
+               && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 140; \
+             fi",
+        ),
         false,
         true,
     );
@@ -560,6 +584,33 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          JSON config files. \
          Example: `curl api.example.com | jq '.users[] | select(.active) | .email'`",
         InstallCmd::Apt(&["jq"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "AWS CLI  (aws)",
+        "Official Amazon Web Services command-line interface, version 2. Query and manage \
+         S3, EC2, IAM, and the rest of the AWS API from the terminal. Ubuntu 24.04 removed \
+         the apt package awscli (the deprecated v1 client), so this installs the current \
+         v2 bundle from AWS into /usr/local/bin/aws. An existing v2 install is left in \
+         place. Example: `aws s3 ls` or `aws sts get-caller-identity`",
+        InstallCmd::Script(
+            "if command -v aws >/dev/null 2>&1 && aws --version 2>&1 | grep -q aws-cli/2; then \
+               echo AWS CLI v2 already installed: $(aws --version 2>&1); \
+             else \
+               apt install -y unzip \
+               && curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip \
+               && rm -rf /tmp/aws \
+               && unzip -q -o /tmp/awscliv2.zip -d /tmp \
+               && if [ -d /usr/local/aws-cli/v2 ]; then \
+                    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update; \
+                  else \
+                    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli; \
+                  fi \
+               && rm -rf /tmp/aws /tmp/awscliv2.zip; \
+             fi",
+        ),
         false,
         true,
     );
@@ -1045,8 +1096,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Disk encryption software and successor to the discontinued TrueCrypt. Create \
          encrypted file containers or encrypt entire partitions and drives. Supports AES, \
          Serpent, Twofish, and cascade combinations, plus hidden volumes for plausible \
-         deniability. Note: may not be in default Ubuntu repos.",
-        InstallCmd::Apt(&["veracrypt"]),
+         deniability. Not in the default Ubuntu archive; installed from the \
+         unit193/encryption PPA.",
+        InstallCmd::Script(
+            "add-apt-repository -y ppa:unit193/encryption \
+             && apt-get update && apt-get install -y veracrypt",
+        ),
         false,
         true,
     );
@@ -1335,7 +1390,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          config files. Useful for creating a minimal, distraction-free desktop layout.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              just-perfection-desktop@just-perfection",
         ),
@@ -1352,7 +1409,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          opening a browser.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              openweather-extension@jenslody.de",
         ),
@@ -1368,7 +1427,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          with a compact sparkline graph that expands on click.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              tophat@fflewddur.github.io",
         ),
@@ -1385,7 +1446,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          the desktop.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              freon@UshakovVasilii_Github.yahoo.com",
         ),
@@ -1401,7 +1464,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          a VPN tunnel is carrying traffic. Highly configurable display format.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              netspeedsimplified@prateekmedia.extension",
         ),
@@ -1417,7 +1482,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          need to open Sound Settings. Saves several clicks when toggling between devices.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              audio-selector@harald65.simon.gmail.com",
         ),
@@ -1434,7 +1501,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          Bluetooth headsets or peripherals.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              bluetooth-quick-connect@bjarosze.gmail.com",
         ),
@@ -1450,7 +1519,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          note. Currently disabled — enable and configure via GNOME Extension Manager.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             sudo -u \"$REAL_USER\" pip3 install --user -q gnome-extensions-cli 2>/dev/null; \
+             apt-get install -y python3-pip >/dev/null \
+             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              simple-message@freddez",
         ),
@@ -1509,8 +1580,14 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Team messaging and collaboration platform. Organized into channels by topic with \
          direct messaging, file sharing, video/audio huddles, and integrations with GitHub, \
          Jira, PagerDuty, Google Calendar, and other dev tools. Installed via snap so it \
-         auto-updates and isn't pinned to a specific .deb version.",
-        InstallCmd::Snap("slack"),
+         auto-updates and isn't pinned to a specific .deb version. Removes the older \
+         slack-desktop .deb when it is still present, so the app menu does not list Slack twice.",
+        InstallCmd::Script(
+            "snap install slack \
+             && if dpkg -s slack-desktop >/dev/null 2>&1; then \
+                  apt-get remove -y slack-desktop; \
+                fi",
+        ),
         false,
         true,
     );
@@ -1541,8 +1618,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
             // with no output. Scrape the current page for the amd64 .deb (this repo
             // targets x86-64 Ubuntu, so amd64 is hardcoded). apt-get installs the
             // local .deb atomically so a failure never poisons apt.
-            "NM_URL=$(curl -fsSL 'https://downloads.nomachine.com/download/?id=1&platform=linux' \
-             | grep -oP 'https://[^\"]+/nomachine_[0-9][^\"]*_amd64\\.deb' | head -1) \
+            "NM_URL=$(curl -fsSL 'https://download.nomachine.com/download/?id=43&platform=linux' \
+             | grep -oP 'https://[^\" ]+/nomachine[^\" ]*_amd64\\.deb' | head -1) \
              && [ -n \"$NM_URL\" ] \
              && curl -fsSL \"$NM_URL\" -o /tmp/nomachine.deb \
              && apt-get install -y /tmp/nomachine.deb \
@@ -1798,7 +1875,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          library. After install, add to mcpServers in ~/.config/Claude/claude_desktop_config.json \
          with command '/usr/bin/python3' pointing to ~/repos/memory-mcp/memory_mcp.py.",
         InstallCmd::Script(
-            "pip3 install mcp \
+            "python3 -m pip install --break-system-packages mcp \
              && REAL_HOME=$(eval echo ~\"${SUDO_USER:-$USER}\") \
              && mkdir -p \"$REAL_HOME/repos/memory-mcp\" \
              && curl -fsSL https://raw.githubusercontent.com/dylansparks/memory-mcp/main/memory_mcp.py \
@@ -1827,7 +1904,12 @@ fn cmd_short(cmd: &InstallCmd) -> String {
             }
         }
         InstallCmd::Cargo(name) => format!("cargo install {}", name),
-        InstallCmd::Pip(pkgs) => format!("pip3 install {}", pkgs.join(" ")),
+        InstallCmd::Pip(pkgs) => {
+            format!(
+                "python3 -m pip install --break-system-packages {}",
+                pkgs.join(" ")
+            )
+        }
         InstallCmd::Snap(name) => format!("snap install {}", name),
     }
 }
@@ -2665,6 +2747,7 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         "NetBird" => apt.contains("netbird"),
         "NordVPN" => apt.contains("nordvpn"),
         "Discord" => apt.contains("discord"),
+        "Slack" => sh_check("snap list slack >/dev/null 2>&1"),
         n if n.starts_with("FiraCode") => sh_check("fc-list 2>/dev/null | grep -qi FiraCode"),
         n if n.starts_with("NoMachine") => sh_check("test -d /usr/NX"),
         n if n.starts_with("GRUB") => apt.contains("grub-customizer"),
@@ -3094,7 +3177,14 @@ fn run_install(packages: Vec<Package>) {
                     .args(["-u", &real_user, &cargo_bin, "install", name])
                     .status()
             }
-            InstallCmd::Pip(pkgs) => Command::new("pip3").arg("install").args(*pkgs).status(),
+            InstallCmd::Pip(pkgs) => {
+                let script = format!(
+                    "python3 -m pip --version >/dev/null 2>&1 || apt-get install -y python3-pip; \
+                     python3 -m pip install --break-system-packages {}",
+                    pkgs.join(" ")
+                );
+                Command::new("sh").args(["-c", &script]).status()
+            }
             InstallCmd::Snap(name) => Command::new("snap").args(["install", name]).status(),
         };
 

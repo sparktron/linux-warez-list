@@ -2,11 +2,11 @@
 
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/download/desktop)
 [![x86-64](https://img.shields.io/badge/arch-x86--64-555)](https://ubuntu.com/)
-[![installer v0.12.2](https://img.shields.io/badge/installer-v0.12.2-blue)](CHANGELOG.md)
-[![106 packages](https://img.shields.io/badge/catalog-106%20packages-success)](#catalog)
+[![installer v0.13.0](https://img.shields.io/badge/installer-v0.13.0-blue)](CHANGELOG.md)
+[![107 packages](https://img.shields.io/badge/catalog-107%20packages-success)](#catalog)
 [![Rust TUI](https://img.shields.io/badge/TUI-ratatui-000?logo=rust&logoColor=white)](https://ratatui.rs/)
 
-A curated Ubuntu dev environment: **106** packages, extensions, and tools across system utilities, languages, the CLI, security, desktop apps, and AI tools. Pick exactly what you want in an interactive TUI, or install the whole set with one script.
+A curated Ubuntu dev environment: **107** packages, extensions, and tools across system utilities, languages, the CLI, security, desktop apps, and AI tools. Pick exactly what you want in an interactive TUI, or install the whole set with one script.
 
 The long-form inventory, with install commands and notes, lives in [`LINUX_WAREZ_LIST.md`](LINUX_WAREZ_LIST.md). Release history is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -36,7 +36,7 @@ sudo ./installer
 sudo bash install-all.sh
 ```
 
-Ubuntu **22.04 LTS**, x86-64. Run with `sudo` so root-only packages unlock. The lowlatency kernel entries are separate for 22.04 and 24.04 — pick the one that matches the machine. Do not install the unversioned `linux-lowlatency` package; on 24.04 it tracks the older 6.8 GA kernel.
+Ubuntu **22.04 LTS**, x86-64. Run with `sudo` so root-only packages unlock. `install-all.sh` installs only the lowlatency kernel for the running Ubuntu release (`linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`). The TUI lists both — pick the one that matches the machine. Do not install the unversioned `linux-lowlatency` package; on 24.04 it tracks the older 6.8 GA kernel.
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) and the [ChatGPT CLI](https://github.com/openai/codex) install first and stay selected. Space and “select none” do not turn them off.
 
@@ -48,7 +48,7 @@ Each run writes a result log of successful and failed attempts to `/var/log/linu
 
 ## 🎛️ Interactive installer
 
-A Rust TUI built with [ratatui](https://ratatui.rs/). Browse all 106 entries by category, read the description on the right, and toggle exactly what you want. Nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://ratatui.rs/). Browse all 107 entries by category, read the description on the right, and toggle exactly what you want. Nothing runs until you confirm.
 
 ### Package selection
 
@@ -91,7 +91,7 @@ Rows are colour-coded by install method:
 
 ## 📦 Catalog
 
-106 entries, in the same order as the TUI. Names link to the upstream project.
+107 entries, in the same order as the TUI. Names link to the upstream project.
 
 <a id="system-tools"></a>
 
@@ -116,24 +116,25 @@ Rows are colour-coded by install method:
 
 | Package | What it is | Method |
 |---------|------------|--------|
-| [Python 3.10](https://www.python.org/) + pip + venv | Interpreter, pip, venv, and headers | apt |
+| [Python 3.10](https://www.python.org/) + pip + venv | Interpreter, pip, venv, and headers | script |
 | [Node.js 20](https://nodejs.org/) + npm | NodeSource Node 20 and npm | script |
 | [npm](https://www.npmjs.com/) (latest) | Upgrade the global npm | script |
 | [Bun](https://bun.sh/) | JavaScript runtime and package manager | script |
 | [Rust](https://rustup.rs/) (via rustup) | rustup toolchain in the invoking user's home | script |
 | [rust-analyzer](https://rust-analyzer.github.io/) | Rust language server (`rustup component`) | script |
 | [GCC](https://gcc.gnu.org/) + G++ + [GDB](https://www.sourceware.org/gdb/) | GNU compiler and debugger | apt |
-| [Clang 14](https://clang.llvm.org/) + LLVM + clang-format-12 | Mythos-pinned Clang 14 and clang-format 12 | apt |
+| [Clang 14](https://clang.llvm.org/) + LLVM + clang-format-12 | Mythos-pinned Clang 14 and clang-format 12 | script |
 
 <a id="cli-tools"></a>
 
-### ⌨️ CLI tools · 27
+### ⌨️ CLI tools · 28
 
 | Package | What it is | Method |
 |---------|------------|--------|
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Fast recursive search (`rg`) | apt |
 | [fd](https://github.com/sharkdp/fd) | Friendly `find` (`fd`; apt package is `fd-find`) | script |
 | [jq](https://jqlang.org/) | JSON processor | apt |
+| [AWS CLI](https://aws.amazon.com/cli/) | AWS CLI v2 (`aws`); apt `awscli` is gone on 24.04 | script |
 | [SQLite](https://www.sqlite.org/) | Embedded SQL shell (`sqlite3`) | apt |
 | [make](https://www.gnu.org/software/make/) | Build files | apt |
 | [Just](https://github.com/casey/just) | Command runner (`justfile`) | cargo |
@@ -183,7 +184,7 @@ Rows are colour-coded by install method:
 | [OpenSSH](https://www.openssh.com/) | SSH server (`sshd`) | apt |
 | [net-tools](https://sourceforge.net/projects/net-tools/) | `ifconfig`, `netstat`, `route` | apt |
 | [WireGuard](https://www.wireguard.com/) | `wg` userspace tools | apt |
-| [VeraCrypt](https://www.veracrypt.fr/) | Disk encryption | apt |
+| [VeraCrypt](https://www.veracrypt.fr/) | Disk encryption | script |
 
 <a id="terminal"></a>
 
@@ -262,7 +263,7 @@ Needs [snapd](#system-tools). The headless script asks before installing snaps.
 |---------|------------|--------|
 | [Spotify](https://www.spotify.com/download/linux/) | Music client (official apt repo) | script |
 | [Discord](https://discord.com/download) | Chat client (`.deb`, not the snap) | script |
-| [Slack](https://slack.com/downloads/linux) | Team chat | snap |
+| [Slack](https://slack.com/downloads/linux) | Team chat (snap; removes leftover `slack-desktop` .deb) | script |
 | [SimpleScreenRecorder](https://www.maartenbaert.be/simplescreenrecorder/) | Screen recorder | apt |
 | [NoMachine](https://www.nomachine.com/) | Remote desktop | script |
 | [GNOME Tweaks](https://wiki.gnome.org/Apps/Tweaks) | Extra desktop settings | apt |
@@ -371,4 +372,4 @@ Leave `SQLAlchemy==2.0.19` and `requests==2.31.0` pinned. Leave FFmpeg on the Ub
 
 ---
 
-**Last updated:** 2026-09-24 · [v0.12.2](CHANGELOG.md)
+**Last updated:** 2026-09-24 · [v0.13.0](CHANGELOG.md)

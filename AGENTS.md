@@ -167,14 +167,14 @@ packages have version pins that must not conflict:
 | SQLAlchemy==2.0.19 | Mythos `requirements.txt` pin | Pip install in both |
 | requests==2.31.0 | Mythos `requirements.txt` pin | Pip install in both |
 | FFmpeg from apt only (4.4.x) | PPA/snap versions ship different libavcodec SO versions | Description notes |
-| Kernel release | Production vessels need lowlatency. Install `linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`. Do not install unversioned `linux-lowlatency` (6.8 GA on 24.04). The headless script prompts for 22.04 or 24.04. | Both installers |
+| Kernel release | Production vessels need lowlatency. Install `linux-lowlatency-hwe-22.04` on Ubuntu 22.04 or `linux-lowlatency-hwe-24.04` on Ubuntu 24.04. Do not install both, and do not install unversioned `linux-lowlatency` (6.8 GA on 24.04). The headless script reads `/etc/os-release` and installs only the matching package. | Both installers |
 
 When adding or updating Python packages, check `~/mythos/third_party/rules_python/requirements.txt`
 for version conflicts.
 
 ## Package Count
 
-README and TUI both reference the total package count (currently 101). Update
+README and TUI both reference the total package count (currently 107). Update
 the count in:
 
 - `README.md` — the total count in the header and anywhere it appears in prose

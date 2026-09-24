@@ -1,6 +1,6 @@
 [package]
 name = "installer-tui"
-version = "0.12.2"
+version = "0.13.0"
 edition = "2021"
 description = "Interactive TUI installer for Ubuntu dev environment"
 
