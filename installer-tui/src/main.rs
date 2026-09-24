@@ -11,7 +11,14 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
-use std::{collections::HashSet, io, process::Command};
+use std::os::unix::fs::OpenOptionsExt;
+use std::{
+    collections::HashSet,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    process::Command,
+};
 extern crate libc;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -127,7 +134,10 @@ impl App {
             }
             let dep_ok = match self.packages[i].requires_pkg {
                 None => true,
-                Some(dep) => self.packages.iter().any(|p| p.name == dep && (p.installed || p.selected)),
+                Some(dep) => self
+                    .packages
+                    .iter()
+                    .any(|p| p.name == dep && (p.installed || p.selected)),
             };
             if dep_ok {
                 self.packages[i].selected = true;
@@ -1523,7 +1533,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
-
     b.pkg(
         "GRUB Customizer",
         "GUI for configuring the GRUB2 boot loader. Reorder and rename boot entries, \
@@ -1934,7 +1943,9 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                 let pkg = &app.packages[*idx];
                 let is_cursor = i == cursor;
                 let dep_locked = pkg.requires_pkg.map_or(false, |dep| {
-                    !app.packages.iter().any(|p| p.name == dep && (p.installed || p.selected))
+                    !app.packages
+                        .iter()
+                        .any(|p| p.name == dep && (p.installed || p.selected))
                 });
                 let locked = (!app.is_root && pkg.requires_root) || dep_locked;
                 let installed = pkg.installed;
@@ -2414,7 +2425,6 @@ fn render_confirm(f: &mut Frame, app: &App) {
             ]));
             lines.push(Line::from(""));
         }
-
     }
 
     // Footer keybinds embedded in the bottom border
@@ -2542,7 +2552,9 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         "fd" => sh_check("which fd || which fdfind"),
         n if n.starts_with("Node.js") => sh_check("which node"),
         n if n.starts_with("npm") => sh_check("which npm"),
-        n if n.starts_with("Bun") => sh_check("which bun || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.bun/bin/bun\""),
+        n if n.starts_with("Bun") => {
+            sh_check("which bun || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.bun/bin/bun\"")
+        }
         n if n.starts_with("Rust") => sh_check("which rustup || which cargo"),
         n if n.starts_with("rust-analyzer") => sh_check("which rust-analyzer"),
         n if n.starts_with("CMake") => sh_check("which cmake"),
@@ -2560,21 +2572,35 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         n if n.starts_with("Google") => apt.contains("google-chrome-stable"),
         "Signal" => apt.contains("signal-desktop"),
         "Claude  (desktop)" => apt.contains("claude-desktop"),
-        "Claude Code  (CLI)" => sh_check("which claude || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/claude\""),
+        "Claude Code  (CLI)" => sh_check(
+            "which claude || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/claude\"",
+        ),
         "Obsidian" => apt.contains("obsidian"),
         "jcodemunch-mcp" => sh_check("pip3 show jcodemunch-mcp 2>/dev/null | grep -q Name"),
-        "memory-mcp  (local)" => sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\""),
+        "memory-mcp  (local)" => {
+            sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\"")
+        }
         // GNOME Shell Extensions
         "Ubuntu Dock  (gnome-ext)" => gnome_ext_installed("ubuntu-dock@ubuntu.com"),
-        "Ubuntu AppIndicators  (gnome-ext)" => gnome_ext_installed("ubuntu-appindicators@ubuntu.com"),
+        "Ubuntu AppIndicators  (gnome-ext)" => {
+            gnome_ext_installed("ubuntu-appindicators@ubuntu.com")
+        }
         "Desktop Icons NG (DING)  (gnome-ext)" => gnome_ext_installed("ding@rastersoft.com"),
-        "Just Perfection  (gnome-ext)" => gnome_ext_installed("just-perfection-desktop@just-perfection"),
+        "Just Perfection  (gnome-ext)" => {
+            gnome_ext_installed("just-perfection-desktop@just-perfection")
+        }
         "OpenWeather  (gnome-ext)" => gnome_ext_installed("openweather-extension@jenslody.de"),
         "TopHat  (gnome-ext)" => gnome_ext_installed("tophat@fflewddur.github.io"),
         "Freon  (gnome-ext)" => gnome_ext_installed("freon@UshakovVasilii_Github.yahoo.com"),
-        "Net Speed Simplified  (gnome-ext)" => gnome_ext_installed("netspeedsimplified@prateekmedia.extension"),
-        "Audio Selector  (gnome-ext)" => gnome_ext_installed("audio-selector@harald65.simon.gmail.com"),
-        "Bluetooth Quick Connect  (gnome-ext)" => gnome_ext_installed("bluetooth-quick-connect@bjarosze.gmail.com"),
+        "Net Speed Simplified  (gnome-ext)" => {
+            gnome_ext_installed("netspeedsimplified@prateekmedia.extension")
+        }
+        "Audio Selector  (gnome-ext)" => {
+            gnome_ext_installed("audio-selector@harald65.simon.gmail.com")
+        }
+        "Bluetooth Quick Connect  (gnome-ext)" => {
+            gnome_ext_installed("bluetooth-quick-connect@bjarosze.gmail.com")
+        }
         "Simple Message  (gnome-ext)" => gnome_ext_installed("simple-message@freddez"),
         _ => false,
     }
@@ -2632,6 +2658,252 @@ fn heal_apt() {
     let _ = Command::new("sh").args(["-c", heal]).status();
 }
 
+/// Result log for one install run.
+///
+/// Each attempt is one TSV line: `status`, `name`, `detail`. `status` is
+/// `ok`, `fail` (command exited non-zero), or `error` (could not launch).
+struct InstallLog {
+    path: Option<PathBuf>,
+    file: Option<std::fs::File>,
+    ok: usize,
+    fail: usize,
+    error: usize,
+    failures: Vec<String>,
+    finished: bool,
+}
+
+fn sanitize_log_field(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| match c {
+            '\t' | '\n' | '\r' => ' ',
+            _ => c,
+        })
+        .collect()
+}
+
+fn format_attempt_line(status: &str, name: &str, detail: &str) -> String {
+    format!(
+        "{}\t{}\t{}\n",
+        status,
+        sanitize_log_field(name),
+        sanitize_log_field(detail)
+    )
+}
+
+fn format_log_header(version: &str, installer: &str, user: &str, started: &str) -> String {
+    format!(
+        "\
+# linux-warez-list install log
+# version: {version}
+# installer: {installer}
+# user: {user}
+# started: {started}
+# columns: status, name, detail
+"
+    )
+}
+
+fn format_log_summary(ok: usize, fail: usize, error: usize, finished: &str) -> String {
+    format!(
+        "\
+# summary: ok={ok} fail={fail} error={error} skip=0 warn=0
+# finished: {finished}
+"
+    )
+}
+
+fn now_iso() -> String {
+    match Command::new("date").arg("-Iseconds").output() {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        _ => std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs().to_string())
+            .unwrap_or_else(|_| "unknown".to_string()),
+    }
+}
+
+fn stamp_for_filename() -> String {
+    match Command::new("date").arg("+%Y%m%d-%H%M%S").output() {
+        Ok(out) if out.status.success() => {
+            let stamp = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if stamp.is_empty() {
+                "unknown".to_string()
+            } else {
+                stamp
+            }
+        }
+        _ => "unknown".to_string(),
+    }
+}
+
+/// First directory we can create and write a file in.
+fn first_writable_dir(candidates: &[PathBuf]) -> Option<PathBuf> {
+    for dir in candidates {
+        if fs::create_dir_all(dir).is_err() {
+            continue;
+        }
+        let probe = dir.join(".write-probe");
+        match OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o644)
+            .open(&probe)
+        {
+            Ok(_) => {
+                let _ = fs::remove_file(&probe);
+                return Some(dir.clone());
+            }
+            Err(_) => continue,
+        }
+    }
+    None
+}
+
+fn install_log_candidates() -> Vec<PathBuf> {
+    let mut candidates = vec![PathBuf::from("/var/log/linux-warez-list")];
+    let home = get_real_home();
+    if !home.is_empty() {
+        candidates.push(PathBuf::from(&home).join(".local/state/linux-warez-list"));
+    }
+    candidates.push(std::env::temp_dir().join("linux-warez-list"));
+    candidates
+}
+
+fn chown_tree_to_real_user(path: &Path) {
+    if !is_root() {
+        return;
+    }
+    let Ok(user) = std::env::var("SUDO_USER") else {
+        return;
+    };
+    if user.is_empty() {
+        return;
+    }
+    let home = get_real_home();
+    if home.is_empty() || !path.starts_with(&home) {
+        return;
+    }
+    let Some(path_str) = path.to_str() else {
+        return;
+    };
+    let _ = Command::new("chown")
+        .args(["-R", &format!("{user}:{user}"), path_str])
+        .status();
+}
+
+impl InstallLog {
+    fn open() -> Self {
+        let user = std::env::var("SUDO_USER")
+            .ok()
+            .filter(|u| !u.is_empty())
+            .or_else(|| std::env::var("USER").ok())
+            .unwrap_or_else(|| "unknown".to_string());
+        let started = now_iso();
+        let header = format_log_header(env!("CARGO_PKG_VERSION"), "tui", &user, &started);
+
+        let mut log = Self {
+            path: None,
+            file: None,
+            ok: 0,
+            fail: 0,
+            error: 0,
+            failures: Vec::new(),
+            finished: false,
+        };
+
+        let Some(dir) = first_writable_dir(&install_log_candidates()) else {
+            println!("\x1b[1;33mInstall log: could not create a log directory; continuing without one.\x1b[0m");
+            return log;
+        };
+
+        let stamp = stamp_for_filename();
+        let mut path = dir.join(format!("install-{stamp}.log"));
+        let mut suffix = 1u32;
+        while path.exists() {
+            path = dir.join(format!("install-{stamp}-{suffix}.log"));
+            suffix += 1;
+        }
+
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o644)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                if file.write_all(header.as_bytes()).is_ok() && file.flush().is_ok() {
+                    log.path = Some(path);
+                    log.file = Some(file);
+                }
+            }
+            Err(e) => {
+                println!("\x1b[1;33mInstall log: could not create log file ({e}); continuing without one.\x1b[0m");
+            }
+        }
+        log
+    }
+
+    fn record(&mut self, status: &'static str, name: &str, detail: &str) {
+        match status {
+            "ok" => self.ok += 1,
+            "fail" => {
+                self.fail += 1;
+                self.failures.push(format!("{name}: {detail}"));
+            }
+            "error" => {
+                self.error += 1;
+                self.failures.push(format!("{name}: {detail}"));
+            }
+            _ => {}
+        }
+        let line = format_attempt_line(status, name, detail);
+        if let Some(file) = self.file.as_mut() {
+            let _ = file.write_all(line.as_bytes());
+            let _ = file.flush();
+        }
+    }
+
+    fn finish(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+        let summary = format_log_summary(self.ok, self.fail, self.error, &now_iso());
+        if let Some(file) = self.file.as_mut() {
+            let _ = file.write_all(summary.as_bytes());
+            let _ = file.flush();
+        }
+        if let Some(path) = &self.path {
+            chown_tree_to_real_user(path.parent().unwrap_or(path));
+        }
+    }
+
+    fn print_footer(&self) {
+        println!(
+            "  Results: {} ok, {} fail, {} error",
+            self.ok, self.fail, self.error
+        );
+        if !self.failures.is_empty() {
+            println!("  Failed:");
+            for failure in &self.failures {
+                println!("    - {failure}");
+            }
+        }
+        match &self.path {
+            Some(path) => println!("  Log: {}", path.display()),
+            None => println!("  Log: not written"),
+        }
+    }
+}
+
+impl Drop for InstallLog {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
 fn run_install(packages: Vec<Package>) {
     if packages.is_empty() {
         println!("No packages selected.");
@@ -2649,6 +2921,11 @@ fn run_install(packages: Vec<Package>) {
     println!("{c}  Ubuntu Dev Environment Installer{x}");
     println!("{c}{bar}{x}\n");
 
+    let mut install_log = InstallLog::open();
+    if let Some(path) = &install_log.path {
+        println!("{c}Install log: {}{x}\n", path.display());
+    }
+
     let has_apt_or_script = packages
         .iter()
         .any(|p| matches!(p.cmd, InstallCmd::Apt(_) | InstallCmd::Script(_)));
@@ -2656,8 +2933,19 @@ fn run_install(packages: Vec<Package>) {
     if has_apt_or_script {
         println!("{y}-> Updating apt package lists...{x}");
         match Command::new("apt").arg("update").status() {
-            Ok(s) if s.success() => println!("{g}   Package lists updated.{x}\n"),
-            _ => println!("{y}   apt update failed — continuing anyway.{x}\n"),
+            Ok(s) if s.success() => {
+                install_log.record("ok", "apt update", "");
+                println!("{g}   Package lists updated.{x}\n");
+            }
+            Ok(s) => {
+                let detail = format!("exit {}", s.code().unwrap_or(-1));
+                install_log.record("fail", "apt update", &detail);
+                println!("{y}   apt update failed — continuing anyway.{x}\n");
+            }
+            Err(e) => {
+                install_log.record("error", "apt update", &e.to_string());
+                println!("{y}   apt update failed — continuing anyway.{x}\n");
+            }
         }
     }
 
@@ -2696,9 +2984,12 @@ fn run_install(packages: Vec<Package>) {
 
         match result {
             Ok(s) if s.success() => {
+                install_log.record("ok", pkg.name, "");
                 println!("{g}   [ok] {} installed successfully.{x}\n", pkg.name)
             }
             Ok(s) => {
+                let code = s.code().unwrap_or(-1);
+                install_log.record("fail", pkg.name, &format!("exit {code}"));
                 println!(
                     "{r}   [fail] {} exited with code {:?}.{x}",
                     pkg.name,
@@ -2710,6 +3001,7 @@ fn run_install(packages: Vec<Package>) {
                 println!();
             }
             Err(e) => {
+                install_log.record("error", pkg.name, &e.to_string());
                 println!(
                     "{r}   [error] Could not launch installer for {}: {}.{x}",
                     pkg.name, e
@@ -2722,8 +3014,10 @@ fn run_install(packages: Vec<Package>) {
         }
     }
 
+    install_log.finish();
     println!("{g}{bar}{x}");
-    println!("{g}  Done! Check output above for any failures.{x}");
+    println!("{g}  Done.{x}");
+    install_log.print_footer();
     println!("{g}{bar}{x}\n");
 }
 
@@ -2746,7 +3040,15 @@ fn dump_json() {
                         let v: Vec<String> = pkgs.iter().map(|s| format!("\"{}\"", s)).collect();
                         ("apt", format!("[{}]", v.join(",")))
                     }
-                    InstallCmd::Script(s) => ("sh", format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"))),
+                    InstallCmd::Script(s) => (
+                        "sh",
+                        format!(
+                            "\"{}\"",
+                            s.replace('\\', "\\\\")
+                                .replace('"', "\\\"")
+                                .replace('\n', "\\n")
+                        ),
+                    ),
                     InstallCmd::Cargo(s) => ("cargo", format!("\"{}\"", s)),
                     InstallCmd::Pip(pkgs) => {
                         let v: Vec<String> = pkgs.iter().map(|s| format!("\"{}\"", s)).collect();
@@ -2756,7 +3058,8 @@ fn dump_json() {
                 };
                 let sep = if first { "" } else { ",\n" };
                 first = false;
-                let desc_escaped = p.description
+                let desc_escaped = p
+                    .description
                     .replace('\\', "\\\\")
                     .replace('"', "\\\"")
                     .replace('\n', "\\n");
@@ -2870,4 +3173,78 @@ fn main() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        first_writable_dir, format_attempt_line, format_log_header, format_log_summary,
+        sanitize_log_field,
+    };
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    #[test]
+    fn attempt_line_is_single_tsv_record() {
+        let line = format_attempt_line("fail", "bottom\t(btm)", "exit 100\nsee apt");
+        assert_eq!(line, "fail\tbottom (btm)\texit 100 see apt\n");
+        assert_eq!(line.matches('\n').count(), 1);
+        assert_eq!(line.matches('\t').count(), 2);
+    }
+
+    #[test]
+    fn sanitize_replaces_tabs_and_newlines() {
+        assert_eq!(sanitize_log_field("a\tb\nc\rd"), "a b c d");
+    }
+
+    #[test]
+    fn header_and_summary_share_the_log_schema() {
+        let header = format_log_header("0.9.6", "tui", "mythos", "2026-09-23T22:00:00-05:00");
+        assert!(header.contains("# version: 0.9.6\n"));
+        assert!(header.contains("# installer: tui\n"));
+        assert!(header.contains("# user: mythos\n"));
+        assert!(header.contains("# columns: status, name, detail\n"));
+
+        let summary = format_log_summary(3, 1, 0, "2026-09-23T22:05:00-05:00");
+        assert_eq!(
+            summary,
+            "\
+# summary: ok=3 fail=1 error=0 skip=0 warn=0
+# finished: 2026-09-23T22:05:00-05:00
+"
+        );
+    }
+
+    #[test]
+    fn first_writable_dir_skips_unwritable_candidates() {
+        let root = std::env::temp_dir().join(format!(
+            "lwl-log-test-{}-{}",
+            std::process::id(),
+            now_suffix()
+        ));
+        let blocked = root.join("blocked");
+        let open = root.join("open");
+        fs::create_dir_all(&blocked).unwrap();
+        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let chosen = first_writable_dir(&[blocked.clone(), open.clone()]);
+        let _ = fs::set_permissions(&blocked, fs::Permissions::from_mode(0o755));
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(chosen, Some(open));
+    }
+
+    #[test]
+    fn first_writable_dir_returns_none_when_every_candidate_fails() {
+        let missing_parent = PathBuf::from("/proc/does-not-exist-lwl/logs");
+        assert_eq!(first_writable_dir(&[missing_parent]), None);
+    }
+
+    fn now_suffix() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    }
 }

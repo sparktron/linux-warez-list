@@ -15,9 +15,150 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-log() { echo -e "${GREEN}✓${NC} $1"; }
-warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+# Install result log. Same schema as the TUI (installer-tui/src/main.rs):
+#   status<TAB>name<TAB>detail
+# status is ok, fail, error, skip, or warn. One attempt per line.
+INSTALL_LOG=""
+OPEN_STEP=""
+OK_COUNT=0
+FAIL_COUNT=0
+ERROR_COUNT=0
+SKIP_COUNT=0
+WARN_COUNT=0
+LOG_FINISHED=0
+
+sanitize_log_field() {
+  local s="$1"
+  s="${s//$'\t'/ }"
+  s="${s//$'\n'/ }"
+  s="${s//$'\r'/ }"
+  printf '%s' "$s"
+}
+
+record() {
+  local status="$1"
+  local name detail
+  name="$(sanitize_log_field "$2")"
+  detail="$(sanitize_log_field "${3:-}")"
+  if [[ -n "$INSTALL_LOG" ]]; then
+    printf '%s\t%s\t%s\n' "$status" "$name" "$detail" >> "$INSTALL_LOG" || true
+  fi
+  case "$status" in
+    ok) OK_COUNT=$((OK_COUNT + 1)) ;;
+    fail) FAIL_COUNT=$((FAIL_COUNT + 1)) ;;
+    error) ERROR_COUNT=$((ERROR_COUNT + 1)) ;;
+    skip) SKIP_COUNT=$((SKIP_COUNT + 1)) ;;
+    warn) WARN_COUNT=$((WARN_COUNT + 1)) ;;
+  esac
+}
+
+close_open_step_ok() {
+  if [[ -n "$OPEN_STEP" ]]; then
+    record ok "$OPEN_STEP" ""
+    OPEN_STEP=""
+  fi
+}
+
+is_step_start() {
+  [[ "$1" == Installing\ * || "$1" == Upgrading\ * || "$1" == Updating\ * || "$1" == Adding\ * || "$1" == Removing\ * ]]
+}
+
+warn_kind() {
+  local msg="$1"
+  if [[ "$msg" == *[Ff]ail* || "$msg" == *Could\ not* ]]; then
+    printf 'fail'
+  elif [[ "$msg" == *skipping* || "$msg" == *Skipping* ]]; then
+    printf 'skip'
+  else
+    printf 'warn'
+  fi
+}
+
+log() {
+  echo -e "${GREEN}✓${NC} $1"
+  if is_step_start "$1"; then
+    close_open_step_ok
+    OPEN_STEP="${1%...}"
+    return
+  fi
+  if [[ -n "$OPEN_STEP" ]]; then
+    record ok "$OPEN_STEP" "$1"
+    OPEN_STEP=""
+  else
+    record ok "$1" ""
+  fi
+}
+
+warn() {
+  echo -e "${YELLOW}⚠${NC} $1"
+  local kind
+  kind="$(warn_kind "$1")"
+  if [[ -n "$OPEN_STEP" && ( "$kind" == "fail" || "$kind" == "skip" ) ]]; then
+    record "$kind" "$OPEN_STEP" "$1"
+    OPEN_STEP=""
+  else
+    record "$kind" "$1" ""
+  fi
+}
+
 error() { echo -e "${RED}✗${NC} $1"; }
+
+write_log_summary() {
+  [[ "$LOG_FINISHED" -eq 0 && -n "$INSTALL_LOG" ]] || return 0
+  LOG_FINISHED=1
+  local code="${1:-0}"
+  if [[ "$code" -ne 0 && -n "$OPEN_STEP" ]]; then
+    record fail "$OPEN_STEP" "exit ${code}"
+    OPEN_STEP=""
+  else
+    close_open_step_ok
+  fi
+  {
+    printf '# summary: ok=%s fail=%s error=%s skip=%s warn=%s\n' \
+      "$OK_COUNT" "$FAIL_COUNT" "$ERROR_COUNT" "$SKIP_COUNT" "$WARN_COUNT"
+    printf '# finished: %s\n' "$(date -Iseconds)"
+  } >> "$INSTALL_LOG" || true
+  echo ""
+  echo "Results: ${OK_COUNT} ok, ${FAIL_COUNT} fail, ${ERROR_COUNT} error, ${SKIP_COUNT} skip, ${WARN_COUNT} warn"
+  echo "Install log: ${INSTALL_LOG}"
+}
+
+on_install_exit() {
+  local code=$?
+  write_log_summary "$code"
+}
+
+init_install_log() {
+  local script_dir version log_dir stamp
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  version="$(sed -n 's/^version = "\(.*\)"/\1/p' "${script_dir}/installer-tui/Cargo.toml" | head -1)"
+  version="${version:-unknown}"
+  log_dir="/var/log/linux-warez-list"
+  if ! mkdir -p "$log_dir" 2>/dev/null || [[ ! -w "$log_dir" ]]; then
+    log_dir="${REAL_HOME}/.local/state/linux-warez-list"
+    mkdir -p "$log_dir"
+    chown -R "${REAL_USER}:${REAL_USER}" "$log_dir" || true
+  fi
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  INSTALL_LOG="${log_dir}/install-${stamp}.log"
+  local suffix=1
+  while [[ -e "$INSTALL_LOG" ]]; do
+    INSTALL_LOG="${log_dir}/install-${stamp}-${suffix}.log"
+    suffix=$((suffix + 1))
+  done
+  {
+    echo "# linux-warez-list install log"
+    echo "# version: ${version}"
+    echo "# installer: headless"
+    echo "# user: ${REAL_USER}"
+    echo "# started: $(date -Iseconds)"
+    echo "# columns: status, name, detail"
+  } > "$INSTALL_LOG"
+  chmod 644 "$INSTALL_LOG" || true
+  trap on_install_exit EXIT
+  echo "Install log: ${INSTALL_LOG}"
+  echo ""
+}
 
 echo "================================"
 echo "Ubuntu Dev Environment Setup"
@@ -87,6 +228,7 @@ heal_apt() {
 
 # Repair any pre-existing broken package state (e.g. left behind by an earlier
 # failed run) before we start, so the first apt operation doesn't inherit it.
+init_install_log
 heal_apt
 
 # Update package list

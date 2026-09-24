@@ -16,6 +16,12 @@ sudo bash install-all.sh
 
 > Requires Ubuntu 22.04 LTS (x86-64). Run with `sudo` to unlock all packages.
 
+Each run writes a result log of successful and failed attempts to
+`/var/log/linux-warez-list/install-YYYYMMDD-HHMMSS.log`. If that directory is
+not writable, the log goes to `~/.local/state/linux-warez-list/`. Lines are
+tab-separated: `status`, `name`, `detail`, where `status` is `ok`, `fail`,
+`error`, `skip`, or `warn`. The footer prints the counts and the log path.
+
 ---
 
 ## Interactive Installer

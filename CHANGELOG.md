@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.6] — 2026-09-23
+
+### Reliability
+
+#### Install runs record each attempt as success or failure
+
+**Motivation:** Install output scrolls away. A later failure (or a reboot after
+the low-latency kernel) left no durable record of which packages succeeded and
+which failed.
+
+**What it does:** Both installers write
+`/var/log/linux-warez-list/install-YYYYMMDD-HHMMSS.log` (falling back to
+`~/.local/state/linux-warez-list/` when that directory is not writable). Each
+attempt is one tab-separated line: `status`, `name`, `detail`. The TUI records
+`ok`, `fail` (non-zero exit), and `error` (could not launch the command),
+including `apt update`. The headless script uses the same schema and also
+records `skip` and `warn`. A summary line and the log path are printed at the
+end. The log is flushed per attempt, so a run that stops mid-way still leaves
+the attempts so far.
+
+Updated in lockstep: `installer-tui/src/main.rs` (`InstallLog` in `run_install`),
+`install-all.sh`, `README.md`, and the rebuilt `installer` binary. No package
+data changed, so `LINUX_WAREZ_LIST.md` was unaffected.
+
+---
+
 ## [0.9.5] — 2026-06-29
 
 ### Reliability
