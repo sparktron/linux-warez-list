@@ -20,7 +20,7 @@
 12. [Fonts](#fonts)
 13. [Shell & Terminal Configuration](#shell--terminal-configuration)
 14. [Cursor Editor Extensions](#cursor-editor-extensions)
-15. [Claude & AI Tools](#claude--ai-tools)
+15. [AI Tools](#ai-tools)
 16. [GNOME Shell Extensions](#gnome-shell-extensions)
 17. [Desktop Environments & Window Managers](#desktop-environments--window-managers)
 
@@ -46,13 +46,13 @@
 - **Usage:** Service management, system initialization
 - **Install:** Included in base Ubuntu
 
-### linux-lowlatency (Kernel)
-- **What:** Ubuntu's low-latency kernel flavor with reduced scheduling latency
+### Linux kernel (Ubuntu 22.04 or 24.04)
+- **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** Real-time audio production, low-latency workloads, interactive desktop; uses 1000 Hz timer and voluntary preemption
-- **Install:** `sudo apt install linux-lowlatency`
-- **Note:** Reboot required after installation for new kernel to take effect
-- **Version Check:** `uname -r` (after reboot, should show `-lowlatency` suffix)
+- **Usage:** `install-all.sh` asks you to choose Ubuntu 22.04 or 24.04. Enter skips the kernel. 22.04 installs `linux-lowlatency-hwe-22.04`. 24.04 installs `linux-lowlatency-hwe-24.04` (7.0 series). The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel.
+- **Install:** Prompt in `install-all.sh`, or the matching TUI entry
+- **Note:** Reboot required after installation
+- **Version Check:** `uname -r`
 
 ### snapd
 - **What:** Snap package manager daemon and core runtime
@@ -354,14 +354,6 @@
 
 ## Development Editors & IDEs
 
-### Cursor
-- **What:** AI-powered code editor built on VS Code
-- **Installed:** Yes
-- **Usage:** Primary code editor for all languages
-- **Install:** Download from https://www.cursor.com/
-- **Config:** `~/.config/Cursor/User/`
-- **Key Extensions:** See [Cursor Editor Extensions](#cursor-editor-extensions)
-
 ### VS Code (if installed)
 - **What:** Visual Studio Code lightweight editor
 - **Installed:** Possibly (Cursor is primary)
@@ -567,7 +559,7 @@
 - **What:** Music streaming service
 - **Installed:** Yes
 - **Usage:** Background music while coding
-- **Install:** `sudo apt install spotify-client` (requires Spotify's apt repo: `deb http://repository.spotify.com stable non-free`)
+- **Install:** Spotify apt repo with key `5384CE82BA52C83A`, then `sudo apt install spotify-client`
 - **Usage:** Desktop application
 
 ### Notion
@@ -581,7 +573,7 @@
 - **What:** Local-first Markdown knowledge base and note-taking app with a graph view and plugin ecosystem
 - **Installed:** Yes (v1.12.7, at `/opt/Obsidian`)
 - **Usage:** Personal knowledge management, linked notes, daily journaling, second brain
-- **Install:** Download latest `.deb` from https://obsidian.md/ and `sudo dpkg -i obsidian_*.deb`
+- **Install:** Download the newest `amd64.deb` from the Obsidian GitHub releases (the `latest` release is often mobile-only) and `sudo apt install ./obsidian.deb`
 - **Version Check:** Obsidian → About
 
 ### NoMachine
@@ -928,14 +920,37 @@
 
 ---
 
-## Claude & AI Tools
+## AI Tools
+
+### Cursor
+- **What:** AI-powered code editor built on VS Code
+- **Installed:** Optional
+- **Usage:** Primary code editor for all languages
+- **Install:** `curl -fL -o /tmp/cursor.deb https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/latest && sudo apt install -y /tmp/cursor.deb`
+- **Config:** `~/.config/Cursor/User/`
+- **Key Extensions:** See [Cursor Editor Extensions](#cursor-editor-extensions)
+- **Version Check:** `cursor --version`
 
 ### Claude Desktop
 - **What:** Anthropic Claude AI assistant — native desktop application
 - **Installed:** Yes (`claude-desktop` v1.9255.2)
 - **Usage:** AI assistant with file uploads, artifact rendering, Projects, and MCP integrations; apt-managed via community Debian repo
-- **Install:** Add aaddrick.github.io/claude-desktop-debian repo, then `sudo apt install claude-desktop`
+- **Install:** Anthropic apt repo `https://downloads.claude.ai/claude-desktop/apt/stable`, then `sudo apt install claude-desktop`
 - **Version Check:** Claude → About
+
+### ChatGPT Desktop
+- **What:** OpenAI ChatGPT desktop app for Linux (preview)
+- **Installed:** Optional
+- **Usage:** Native ChatGPT workspace with local projects and Codex. Preview supports Ubuntu 24.04 and 26.04, x64 and ARM64. The .deb adds OpenAI's apt repository for later upgrades.
+- **Install:** `curl -fL -o /tmp/chatgpt.deb https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb && sudo apt install -y /tmp/chatgpt.deb`
+- **Version Check:** `chatgpt` (or ChatGPT → About)
+
+### ChatGPT CLI (Codex)
+- **What:** OpenAI Codex command-line agent
+- **Installed:** Optional
+- **Usage:** Terminal agent that reads and edits the local project. Sign in with a ChatGPT account on first run. Binary is `codex` in `~/.local/bin`.
+- **Install:** `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
+- **Version Check:** `codex --version`
 
 ### Claude Code (CLI)
 - **What:** Anthropic's official agentic CLI for Claude — runs in the terminal and operates directly on your codebase
@@ -967,7 +982,7 @@
 - **Installed:** Yes (v1.108.27 via pip; run via `uvx` from Claude Code)
 - **Usage:** Lets Claude Code parse and navigate codebases at the AST level without reading full file contents — reduces token usage on large repos
 - **Config:** `~/.claude/settings.json` → `mcpServers.jcodemunch`
-- **Install:** `pip install jcodemunch-mcp` (or let uvx fetch it automatically), then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
+- **Install:** `sudo apt install python3-pip && python3 -m pip install --break-system-packages jcodemunch-mcp`, then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
   ```json
   "jcodemunch": {
     "command": "uvx",

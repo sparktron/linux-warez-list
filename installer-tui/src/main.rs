@@ -107,6 +107,9 @@ impl App {
                 .requires_pkg
                 .map_or(false, |dep| !self.dep_satisfied(dep));
             if !root_locked && !dep_locked && !self.packages[i].installed {
+                if is_always_installed(self.packages[i].name) && self.packages[i].selected {
+                    return;
+                }
                 self.packages[i].selected = !self.packages[i].selected;
                 // Cascade-deselect any packages that depend on this one
                 if !self.packages[i].selected {
@@ -147,7 +150,7 @@ impl App {
 
     fn select_none(&mut self) {
         for p in &mut self.packages {
-            p.selected = false;
+            p.selected = is_always_installed(p.name);
         }
     }
 
@@ -313,16 +316,46 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "linux-lowlatency  (kernel)",
-        "Ubuntu's low-latency kernel flavor, tuned to minimize scheduling latency for \
-         real-time workloads and interactive use. Replaces the default generic kernel with \
-         one that uses a 1000 Hz timer, voluntary preemption, and reduced latency \
-         optimizations throughout the I/O and CPU scheduler paths. Required on Mythos \
-         production vessels for real-time control loops and sensor processing — the \
-         sys_monitor_service checks the running kernel version against the configured \
-         instance config. Also recommended for audio production and video editing. \
-         A reboot is required after installation. Verify with: uname -r",
-        InstallCmd::Apt(&["linux-lowlatency"]),
+        "Ubuntu 22.04 lowlatency kernel",
+        "Low-latency hardware-enablement kernel for Ubuntu 22.04 \
+         (linux-lowlatency-hwe-22.04). This is the kernel series Mythos production \
+         vessels use. It is not the unversioned linux-lowlatency package, which on \
+         Ubuntu 24.04 tracks the older 6.8 GA kernel. A reboot is required. \
+         Verify with: uname -r",
+        InstallCmd::Apt(&["linux-lowlatency-hwe-22.04"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "Ubuntu 24.04 lowlatency kernel",
+        "Low-latency hardware-enablement kernel for Ubuntu 24.04 \
+         (linux-lowlatency-hwe-24.04). On 24.04 this tracks the 7.0 series, matching \
+         a current HWE desktop instead of the 6.8 GA kernel from unversioned \
+         linux-lowlatency. A reboot is required. Verify with: uname -r",
+        InstallCmd::Apt(&["linux-lowlatency-hwe-24.04"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "GRUB Customizer",
+        "GUI for configuring the GRUB2 boot loader. Reorder and rename boot entries, \
+         set the default OS, change the timeout, enable/disable the splash screen, and \
+         set boot resolution — without manually editing grub config files. Useful on \
+         dual-boot systems where GRUB isn't ordering entries correctly or you want a \
+         cleaner boot menu. Requires the danielrichter2007 PPA — the installer adds \
+         it automatically before installing.",
+        InstallCmd::Script(
+            "add-apt-repository -y ppa:danielrichter2007/grub-customizer \
+             && if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+                  curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+                  | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+                  && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+                  > /etc/apt/sources.list.d/spotify.list; \
+                fi \
+             && apt update && apt install -y grub-customizer",
+        ),
         false,
         true,
     );
@@ -330,7 +363,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     b.pkg(
         "snapd",
         "Snap package manager daemon. Required for installing remaining snap packages \
-         (Spotify, Notion, NordPass, bottom, etc.). Usually pre-installed on \
+         (Notion, NordPass). Usually pre-installed on \
          Ubuntu desktop but may be absent on minimal or server installs. If snap commands \
          fail with 'command not found', install this first. Also installs the snap core \
          runtime.",
@@ -437,7 +470,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Systems programming language with compile-time memory safety and no garbage collector. \
          Installed via rustup (official toolchain manager), which also installs cargo \
          (package/build manager) and rustc (compiler). Excellent for CLI tools, WebAssembly, \
-         embedded systems, and high-performance code. Required for Starship and Just below. \
+         embedded systems, and high-performance code. Required for rust-analyzer, Starship, and Just. \
          When run via sudo, installs into the invoking user's home directory (not root's).",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\" \
@@ -447,6 +480,25 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         false,
     );
+
+    b.pkg(
+        "rust-analyzer  (LSP)",
+        "Official Rust language server — the backbone of IDE support for Rust in Cursor, \
+         VS Code, Neovim, and any LSP-capable editor. Provides real-time inline error \
+         diagnostics, type inference hints, go-to-definition, auto-completion, rename \
+         refactoring, and code actions without leaving your editor. Installed as a rustup \
+         component so it stays in sync with your active toolchain. After install it is \
+         available at ~/.cargo/bin/rust-analyzer and picked up automatically by most editors. \
+         Requires Rust (rustup) — install above first if needed.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && REAL_HOME=$(getent passwd \"${REAL_USER}\" | cut -d: -f6) \
+             && sudo -u \"${REAL_USER}\" \"${REAL_HOME}/.cargo/bin/rustup\" component add rust-analyzer",
+        ),
+        false,
+        false,
+    );
+    b.dep("Rust  (via rustup)");
 
     b.pkg(
         "GCC  +  G++  +  GDB",
@@ -502,17 +554,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "direnv",
-        "Automatically loads and unloads environment variables when you cd into or out of a \
-         directory. Define project-specific vars in a .envrc file (DATABASE_URL, API_KEY, \
-         PYTHONPATH, etc.) and they appear in your shell automatically. After install, add \
-         `eval \"$(direnv hook bash)\"` to ~/.bashrc and run `direnv allow` in each project.",
-        InstallCmd::Apt(&["direnv"]),
-        false,
-        true,
-    );
-
-    b.pkg(
         "jq",
         "Lightweight and flexible command-line JSON processor. Parse, filter, transform, and \
          pretty-print JSON in scripts and pipelines. Indispensable when working with APIs or \
@@ -543,6 +584,18 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Apt(&["make"]),
         false,
         true,
+    );
+
+    b.pkg(
+        "Just  (task runner)",
+        "Modern Make alternative with cleaner, more readable syntax and much better error \
+         messages. Define project tasks in a justfile with optional parameters, env file \
+         loading, and shell completions. Cross-platform and significantly more pleasant than \
+         Makefiles. Example: `just build`, `just test filter`, `just deploy staging`. \
+         Requires cargo — install Rust above first if needed.",
+        InstallCmd::Cargo("just"),
+        false,
+        false,
     );
 
     b.pkg(
@@ -629,18 +682,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          bash (Ctrl+R history, Ctrl+T file search, Alt+C cd). \
          Example: `git log --oneline | fzf` or `cd $(fd -t d | fzf)`",
         InstallCmd::Apt(&["fzf"]),
-        false,
-        true,
-    );
-
-    b.pkg(
-        "hstr  (bash history)",
-        "Greatly improved bash command history. Sorts entries by frequency and recency, \
-         highlights matches, and lets you search, favorite, and re-run past commands \
-         interactively. After install, add `eval \"$(hstr --show-configuration)\"` to \
-         ~/.bashrc and bind it to Ctrl+R. Far more useful than readline's default \
-         reverse-search — especially on a machine with thousands of stored commands.",
-        InstallCmd::Apt(&["hstr"]),
         false,
         true,
     );
@@ -999,6 +1040,17 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
+    b.pkg(
+        "VeraCrypt",
+        "Disk encryption software and successor to the discontinued TrueCrypt. Create \
+         encrypted file containers or encrypt entire partitions and drives. Supports AES, \
+         Serpent, Twofish, and cascade combinations, plus hidden volumes for plausible \
+         deniability. Note: may not be in default Ubuntu repos.",
+        InstallCmd::Apt(&["veracrypt"]),
+        false,
+        true,
+    );
+
     // ── Terminal & Shell ──────────────────────────────────────────────────────
     b.cat("  Terminal & Shell");
 
@@ -1009,6 +1061,29 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          git, apt, systemctl, ssh, and more. Makes navigating the shell dramatically faster \
          and helps discover available command options.",
         InstallCmd::Apt(&["bash-completion"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "direnv",
+        "Automatically loads and unloads environment variables when you cd into or out of a \
+         directory. Define project-specific vars in a .envrc file (DATABASE_URL, API_KEY, \
+         PYTHONPATH, etc.) and they appear in your shell automatically. After install, add \
+         `eval \"$(direnv hook bash)\"` to ~/.bashrc and run `direnv allow` in each project.",
+        InstallCmd::Apt(&["direnv"]),
+        false,
+        true,
+    );
+
+    b.pkg(
+        "hstr  (bash history)",
+        "Greatly improved bash command history. Sorts entries by frequency and recency, \
+         highlights matches, and lets you search, favorite, and re-run past commands \
+         interactively. After install, add `eval \"$(hstr --show-configuration)\"` to \
+         ~/.bashrc and bind it to Ctrl+R. Far more useful than readline's default \
+         reverse-search — especially on a machine with thousands of stored commands.",
+        InstallCmd::Apt(&["hstr"]),
         false,
         true,
     );
@@ -1036,9 +1111,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         true,
     );
 
-    // ── Rust Tools ────────────────────────────────────────────────────────────
-    b.cat("  Rust Tools  (cargo required)");
-
     b.pkg(
         "Starship  (shell prompt)",
         "Minimal, fast, and infinitely customizable shell prompt written in Rust. Shows git \
@@ -1050,37 +1122,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         false,
     );
-
-    b.pkg(
-        "Just  (task runner)",
-        "Modern Make alternative with cleaner, more readable syntax and much better error \
-         messages. Define project tasks in a justfile with optional parameters, env file \
-         loading, and shell completions. Cross-platform and significantly more pleasant than \
-         Makefiles. Example: `just build`, `just test filter`, `just deploy staging`. \
-         Requires cargo — install Rust above first if needed.",
-        InstallCmd::Cargo("just"),
-        false,
-        false,
-    );
-
-    b.pkg(
-        "rust-analyzer  (LSP)",
-        "Official Rust language server — the backbone of IDE support for Rust in Cursor, \
-         VS Code, Neovim, and any LSP-capable editor. Provides real-time inline error \
-         diagnostics, type inference hints, go-to-definition, auto-completion, rename \
-         refactoring, and code actions without leaving your editor. Installed as a rustup \
-         component so it stays in sync with your active toolchain. After install it is \
-         available at ~/.cargo/bin/rust-analyzer and picked up automatically by most editors. \
-         Requires Rust (rustup) — install above first if needed.",
-        InstallCmd::Script(
-            "REAL_USER=\"${SUDO_USER:-$USER}\" \
-             && REAL_HOME=$(getent passwd \"${REAL_USER}\" | cut -d: -f6) \
-             && sudo -u \"${REAL_USER}\" \"${REAL_HOME}/.cargo/bin/rustup\" component add rust-analyzer",
-        ),
-        false,
-        false,
-    );
-    b.dep("Rust  (via rustup)");
 
     // ── Python Packages ───────────────────────────────────────────────────────
     b.cat("  Python Packages  (pip required)");
@@ -1217,24 +1258,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
 
     // ── Snap Applications ─────────────────────────────────────────────────────
     b.cat("  Snap Applications  (snapd required)");
-
-    b.pkg(
-        "Spotify",
-        "Music streaming service with a catalog of 100M+ tracks. Great for background music \
-         during long coding sessions. The desktop app supports media key controls \
-         (play/pause, next/prev) and system notifications. Installed from Spotify's \
-         official apt repository.",
-        InstallCmd::Script(
-            "curl -sS https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg \
-             | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
-             && echo 'deb http://repository.spotify.com stable non-free' \
-             > /etc/apt/sources.list.d/spotify.list \
-             && apt update \
-             && apt install -y spotify-client",
-        ),
-        false,
-        true,
-    );
 
     b.pkg(
         "Notion  (snap)",
@@ -1440,6 +1463,25 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     b.cat("  Desktop Applications");
 
     b.pkg(
+        "Spotify",
+        "Music streaming service with a catalog of 100M+ tracks. Great for background music \
+         during long coding sessions. The desktop app supports media key controls \
+         (play/pause, next/prev) and system notifications. Installed from Spotify's \
+         official apt repository.",
+        InstallCmd::Script(
+            "curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+             | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+             && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] \
+             https://repository.spotify.com stable non-free' \
+             > /etc/apt/sources.list.d/spotify.list \
+             && apt update \
+             && apt install -y spotify-client",
+        ),
+        false,
+        true,
+    );
+
+    b.pkg(
         "Discord",
         "Voice, video, and text communication platform. Widely used by developer communities, \
          open source projects, and teams. Supports screen share, rich presence, bots, webhooks, \
@@ -1485,17 +1527,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
     );
 
     b.pkg(
-        "VeraCrypt",
-        "Disk encryption software and successor to the discontinued TrueCrypt. Create \
-         encrypted file containers or encrypt entire partitions and drives. Supports AES, \
-         Serpent, Twofish, and cascade combinations, plus hidden volumes for plausible \
-         deniability. Note: may not be in default Ubuntu repos.",
-        InstallCmd::Apt(&["veracrypt"]),
-        false,
-        true,
-    );
-
-    b.pkg(
         "NoMachine",
         "High-performance remote desktop solution using the NX protocol — significantly \
          faster than VNC or RDP for both LAN and WAN connections. Supports full desktop \
@@ -1529,22 +1560,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          cursor/icon/GTK/shell themes. Essential for anyone who wants meaningful \
          control over their GNOME desktop appearance and behavior beyond the defaults.",
         InstallCmd::Apt(&["gnome-tweaks"]),
-        false,
-        true,
-    );
-
-    b.pkg(
-        "GRUB Customizer",
-        "GUI for configuring the GRUB2 boot loader. Reorder and rename boot entries, \
-         set the default OS, change the timeout, enable/disable the splash screen, and \
-         set boot resolution — without manually editing grub config files. Useful on \
-         dual-boot systems where GRUB isn't ordering entries correctly or you want a \
-         cleaner boot menu. Requires the danielrichter2007 PPA — the installer adds \
-         it automatically before installing.",
-        InstallCmd::Script(
-            "add-apt-repository -y ppa:danielrichter2007/grub-customizer \
-             && apt update && apt install -y grub-customizer",
-        ),
         false,
         true,
     );
@@ -1598,6 +1613,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              signed-by=/usr/share/keyrings/google-chrome.gpg] \
              https://dl.google.com/linux/chrome/deb/ stable main\" \
              | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null \
+             && if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+                  curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+                  | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+                  && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+                  > /etc/apt/sources.list.d/spotify.list; \
+                fi \
              && apt update && apt install -y google-chrome-stable",
         ),
         false,
@@ -1618,6 +1639,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] \
              https://updates.signal.org/desktop/apt xenial main\" \
              | tee /etc/apt/sources.list.d/signal-xenial.list > /dev/null \
+             && if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+                  curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+                  | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+                  && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+                  > /etc/apt/sources.list.d/spotify.list; \
+                fi \
              && apt update && apt install -y signal-desktop",
         ),
         false,
@@ -1631,11 +1658,69 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          lock-in. Excellent for personal knowledge management, linked notes, daily journaling, \
          and building a second brain. Installed from the official GitHub releases .deb.",
         InstallCmd::Script(
-            "OBS_URL=$(curl -s https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest \
-             | grep browser_download_url | grep '\\.deb' | grep -v arm | head -1 | cut -d'\"' -f4) \
-             && curl -Lo /tmp/obsidian.deb \"$OBS_URL\" \
+            "OBS_URL=$(curl -fsSL 'https://api.github.com/repos/obsidianmd/obsidian-releases/releases?per_page=40' \
+             | grep -o 'https://github.com/obsidianmd/obsidian-releases/releases/download/[^\"]*_amd64\\.deb' \
+             | head -1) \
+             && [ -n \"$OBS_URL\" ] \
+             && curl -fL \"$OBS_URL\" -o /tmp/obsidian.deb \
              && apt install -y /tmp/obsidian.deb \
              && rm -f /tmp/obsidian.deb",
+        ),
+        false,
+        true,
+    );
+
+    // ── AI Tools ──────────────────────────────────────────────────────────────
+    b.cat("  AI Tools");
+
+    b.pkg(
+        "Claude Code  (CLI)",
+        "Anthropic's official agentic CLI for Claude. Runs in the terminal and operates \
+         directly on your codebase — generate, edit, refactor, debug, and explore code \
+         with full file-system access. Supports slash commands, MCP servers, hooks, and \
+         multi-step autonomous tasks. Installed as a global npm package; requires Node.js. \
+         Always installed, and it runs before the other packages.",
+        InstallCmd::Script(
+            "command -v node >/dev/null 2>&1 || { \
+               curl -fsSL https://deb.nodesource.com/setup_20.x | bash \
+               && apt-get install -y nodejs; \
+             } \
+             && npm install -g @anthropic-ai/claude-code",
+        ),
+        true,
+        true,
+    );
+
+    b.pkg(
+        "ChatGPT  (CLI)",
+        "OpenAI Codex CLI. Runs in the terminal and works on the local project: read and \
+         edit files, run commands, and apply patches. Official Linux install is the \
+         standalone installer, which lands `codex` in the invoking user's ~/.local/bin. \
+         The first run asks you to sign in with a ChatGPT account. Requires ~/.local/bin \
+         on PATH. Always installed, and it runs before the other packages.",
+        InstallCmd::Script(
+            "REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && sudo -u \"$REAL_USER\" bash -c \
+             'curl -fsSL https://chatgpt.com/codex/install.sh | sh'",
+        ),
+        true,
+        false,
+    );
+
+    b.pkg(
+        "Cursor",
+        "AI code editor built on VS Code. The Linux .deb from Cursor's update channel \
+         also registers the apt repository used for later upgrades. x64 uses the golden \
+         linux-x64-deb package; ARM64 uses linux-arm64-deb. Launch with `cursor`.",
+        InstallCmd::Script(
+            "case \"$(dpkg --print-architecture)\" in \
+               amd64) URL=https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/latest ;; \
+               arm64) URL=https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/latest ;; \
+               *) echo \"unsupported architecture\" >&2; exit 1 ;; \
+             esac \
+             && curl -fL -o /tmp/cursor.deb \"$URL\" \
+             && apt-get install -y /tmp/cursor.deb \
+             && rm -f /tmp/cursor.deb",
         ),
         false,
         true,
@@ -1645,34 +1730,45 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         "Claude  (desktop)",
         "Anthropic's Claude AI assistant as a native desktop application. Full-featured \
          interface with conversation history, file uploads, artifact rendering, and \
-         Projects for long-context work. Installed from the community-maintained Debian \
-         package repository at aaddrick.github.io/claude-desktop-debian, which tracks \
-         official Claude Desktop releases and provides apt-managed updates so Claude \
-         stays current with `apt upgrade`.",
+         Projects for long-context work. Installed from Anthropic's apt repository \
+         so updates arrive with `apt upgrade`.",
         InstallCmd::Script(
-            "curl -fsSL \
-             https://aaddrick.github.io/claude-desktop-debian/public-key.gpg \
-             | gpg --dearmor --yes -o /usr/share/keyrings/claude-desktop.gpg \
-             && echo \"deb [signed-by=/usr/share/keyrings/claude-desktop.gpg \
-             arch=$(dpkg --print-architecture)] \
-             https://aaddrick.github.io/claude-desktop-debian stable main\" \
+            "curl -fsSLo /usr/share/keyrings/claude-desktop-archive-keyring.asc \
+             https://downloads.claude.ai/claude-desktop/key.asc \
+             && echo \"deb [arch=$(dpkg --print-architecture) \
+             signed-by=/usr/share/keyrings/claude-desktop-archive-keyring.asc] \
+             https://downloads.claude.ai/claude-desktop/apt/stable stable main\" \
              | tee /etc/apt/sources.list.d/claude-desktop.list > /dev/null \
+             && if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+                  curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+                  | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+                  && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+                  > /etc/apt/sources.list.d/spotify.list; \
+                fi \
              && apt update && apt install -y claude-desktop",
         ),
         false,
         true,
     );
 
-    // ── Claude & AI Tools ─────────────────────────────────────────────────────
-    b.cat("  Claude & AI Tools");
-
     b.pkg(
-        "Claude Code  (CLI)",
-        "Anthropic's official agentic CLI for Claude. Runs in the terminal and operates \
-         directly on your codebase — generate, edit, refactor, debug, and explore code \
-         with full file-system access. Supports slash commands, MCP servers, hooks, and \
-         multi-step autonomous tasks. Installed as a global npm package; requires Node.js.",
-        InstallCmd::Script("npm install -g @anthropic-ai/claude-code"),
+        "ChatGPT  (desktop)",
+        "OpenAI's ChatGPT desktop app for Linux (preview). Native workspace for ChatGPT, \
+         local projects, and Codex. The official .deb also adds OpenAI's apt repository \
+         so later updates come from apt. Preview supports Ubuntu 24.04 and 26.04, x64 \
+         and ARM64. Launch with `chatgpt` and sign in. On Wayland the app uses XWayland \
+         unless started with `chatgpt --ozone-platform=wayland`.",
+        InstallCmd::Script(
+            "case \"$(dpkg --print-architecture)\" in \
+               amd64) DEB=chatgpt_amd64.deb ;; \
+               arm64) DEB=chatgpt_arm64.deb ;; \
+               *) echo \"unsupported architecture\" >&2; exit 1 ;; \
+             esac \
+             && curl -fL -o /tmp/chatgpt.deb \
+             \"https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/${DEB}\" \
+             && apt-get install -y /tmp/chatgpt.deb \
+             && rm -f /tmp/chatgpt.deb",
+        ),
         false,
         true,
     );
@@ -1686,9 +1782,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          in your project root to initialize it, (2) add to mcpServers in ~/.claude/settings.json \
          with command 'uvx' and args \
          ['--from', 'git+https://github.com/jgravelle/jcodemunch-mcp.git', 'jcodemunch-mcp'].",
-        InstallCmd::Script("pip3 install jcodemunch-mcp"),
+        InstallCmd::Script(
+            "apt-get install -y python3-pip \
+             && python3 -m pip install --break-system-packages jcodemunch-mcp",
+        ),
         false,
-        false,
+        true,
     );
 
     b.pkg(
@@ -2571,7 +2670,12 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         n if n.starts_with("GRUB") => apt.contains("grub-customizer"),
         n if n.starts_with("Google") => apt.contains("google-chrome-stable"),
         "Signal" => apt.contains("signal-desktop"),
+        "Cursor" => apt.contains("cursor"),
         "Claude  (desktop)" => apt.contains("claude-desktop"),
+        "ChatGPT  (desktop)" => apt.contains("chatgpt"),
+        "ChatGPT  (CLI)" => sh_check(
+            "which codex || test -x \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/codex\"",
+        ),
         "Claude Code  (CLI)" => sh_check(
             "which claude || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/claude\"",
         ),
@@ -2606,6 +2710,10 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
     }
 }
 
+fn is_always_installed(name: &str) -> bool {
+    name == "Claude Code  (CLI)" || name == "ChatGPT  (CLI)"
+}
+
 fn check_all_installed(packages: &mut Vec<Package>) {
     let apt = get_apt_installed();
     let snaps = get_snap_installed();
@@ -2626,8 +2734,11 @@ fn check_all_installed(packages: &mut Vec<Package>) {
             }
             InstallCmd::Script(_) => check_script_installed(pkg.name, &apt),
         };
-        if pkg.installed {
+        if pkg.installed && !is_always_installed(pkg.name) {
             pkg.selected = false;
+        }
+        if is_always_installed(pkg.name) {
+            pkg.selected = true;
         }
     }
 }
@@ -2932,6 +3043,15 @@ fn run_install(packages: Vec<Package>) {
 
     if has_apt_or_script {
         println!("{y}-> Updating apt package lists...{x}");
+        // An expired Spotify signing key makes apt update exit 100 for every
+        // later package that refreshes the package lists.
+        let _ = Command::new("sh").args(["-c",
+            "if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+               curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+               | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+               && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+               > /etc/apt/sources.list.d/spotify.list; \
+             fi"]).status();
         match Command::new("apt").arg("update").status() {
             Ok(s) if s.success() => {
                 install_log.record("ok", "apt update", "");
@@ -3158,7 +3278,18 @@ fn main() -> io::Result<()> {
     }
 
     let selected: Vec<Package> = if do_install {
-        app.selected_packages().into_iter().cloned().collect()
+        let mut selected: Vec<Package> = app.selected_packages().into_iter().cloned().collect();
+        // Claude Code and the ChatGPT CLI are installed on every run, before anything else.
+        let mut front = Vec::new();
+        for name in ["Claude Code  (CLI)", "ChatGPT  (CLI)"] {
+            if let Some(i) = selected.iter().position(|p| p.name == name) {
+                front.push(selected.remove(i));
+            } else if let Some(p) = app.packages.iter().find(|p| p.name == name) {
+                front.push(p.clone());
+            }
+        }
+        front.append(&mut selected);
+        front
     } else {
         vec![]
     };

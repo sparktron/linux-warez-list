@@ -226,13 +226,71 @@ heal_apt() {
   apt-get install -f -y >/dev/null 2>&1 || true
 }
 
+# Install the low-latency HWE kernel for Ubuntu 22.04 or 24.04. The unversioned
+# linux-lowlatency metapackage tracks the GA kernel (6.8 on 24.04), which is
+# older than a current HWE desktop kernel. The release-specific metapackage
+# keeps the kernel on that Ubuntu release's HWE series.
+choose_and_install_kernel() {
+  local -a releases=("22.04" "24.04")
+  local rel pkg cand i choice selected
+  log "Choose an Ubuntu release for the low-latency kernel (running: $(uname -r))..."
+  echo "  0) Skip kernel installation"
+  i=1
+  for rel in "${releases[@]}"; do
+    pkg="linux-lowlatency-hwe-${rel}"
+    cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -z "$cand" || "$cand" == "(none)" ]]; then
+      cand="not in apt"
+    fi
+    printf '  %d) Ubuntu %s (%s, %s)\n' "$i" "$rel" "$pkg" "$cand"
+    i=$((i + 1))
+  done
+  read -r -p "Select 22.04 or 24.04 [0]: " choice || true
+  choice="${choice:-0}"
+  if [[ "$choice" == "0" ]]; then
+    warn "Skipping kernel installation"
+    return 0
+  fi
+  if [[ "$choice" != "1" && "$choice" != "2" ]]; then
+    warn "Invalid kernel choice '${choice}', skipping"
+    return 0
+  fi
+  selected="${releases[$((choice - 1))]}"
+  pkg="linux-lowlatency-hwe-${selected}"
+  cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  if [[ -z "$cand" || "$cand" == "(none)" ]]; then
+    warn "Could not install ${pkg}: package is not in apt"
+    return 0
+  fi
+  log "Installing kernel ${pkg}..."
+  apt install -y "$pkg"
+  warn "Reboot required before the Ubuntu ${selected} low-latency kernel becomes the running kernel"
+  warn "After reboot, verify with: uname -r"
+}
+
 # Repair any pre-existing broken package state (e.g. left behind by an earlier
 # failed run) before we start, so the first apt operation doesn't inherit it.
 init_install_log
 heal_apt
 
+# Spotify rotates its repository signing key. An old key left in
+# /etc/apt/trusted.gpg.d makes every later `apt update` exit 100, which
+# aborts GRUB Customizer, Chrome, Signal, and anything else that refreshes
+# package lists. Rewrite the source to the current key when the repo is present.
+repair_spotify_apt() {
+  if ! grep -Rqs 'repository.spotify.com' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+    return 0
+  fi
+  curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
+    | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
+    || return 0
+  echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
+    > /etc/apt/sources.list.d/spotify.list
+}
+
 # Update package list
 log "Updating package list..."
+repair_spotify_apt
 apt update
 
 # ===== SYSTEM PACKAGES =====
@@ -245,10 +303,7 @@ apt install -y build-essential
 log "Installing Git..."
 apt install -y git
 
-log "Installing low-latency kernel..."
-apt install -y linux-lowlatency
-warn "Reboot required after installation for low-latency kernel to take effect"
-warn "After reboot, verify with: uname -r (should show *-lowlatency)"
+choose_and_install_kernel
 
 log "Installing snapd (required for snap packages)..."
 apt install -y snapd
@@ -309,6 +364,15 @@ fi
 # ===== NPM (upgrade to latest) =====
 log "Upgrading npm to latest stable..."
 npm install -g npm@latest 2>/dev/null || warn "npm upgrade failed"
+
+# Always install the two CLIs before the rest of the environment. Claude Code
+# needs npm, which is in place above. Codex does not.
+log "Installing Claude Code CLI..."
+npm install -g @anthropic-ai/claude-code || warn "Claude Code install failed"
+
+log "Installing ChatGPT CLI (Codex)..."
+sudo -u "${REAL_USER}" bash -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' \
+  || warn "ChatGPT CLI install failed"
 
 # ===== BUN =====
 if ! sudo -u "${REAL_USER}" bash -c 'command -v bun' &> /dev/null; then
@@ -706,6 +770,7 @@ apt install -y gnome-shell-extension-manager
 
 log "Installing GRUB Customizer..."
 add-apt-repository -y ppa:danielrichter2007/grub-customizer
+repair_spotify_apt
 apt update
 apt install -y grub-customizer
 
@@ -724,6 +789,7 @@ if ! command -v google-chrome-stable &> /dev/null; then
     | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg
   echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
     | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+  repair_spotify_apt
   apt update
   apt install -y google-chrome-stable
 else
@@ -736,22 +802,65 @@ if ! command -v signal-desktop &> /dev/null; then
     | gpg --dearmor --yes -o /usr/share/keyrings/signal-desktop-keyring.gpg
   echo "deb [arch=amd64 signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] https://updates.signal.org/desktop/apt xenial main" \
     | tee /etc/apt/sources.list.d/signal-xenial.list > /dev/null
+  repair_spotify_apt
   apt update
   apt install -y signal-desktop
 else
   log "Signal already installed"
 fi
 
+log "Installing Cursor..."
+if ! dpkg -l cursor &>/dev/null; then
+  case "$(dpkg --print-architecture)" in
+    amd64) CURSOR_URL="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/latest" ;;
+    arm64) CURSOR_URL="https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/latest" ;;
+    *) warn "Cursor has no package for $(dpkg --print-architecture)"; CURSOR_URL="" ;;
+  esac
+  if [ -n "${CURSOR_URL}" ]; then
+    if curl -fL -o /tmp/cursor.deb "${CURSOR_URL}"; then
+      apt-get install -y /tmp/cursor.deb || warn "Cursor install failed"
+      rm -f /tmp/cursor.deb
+    else
+      warn "Could not download Cursor"
+      rm -f /tmp/cursor.deb
+    fi
+  fi
+else
+  log "Cursor already installed"
+fi
+
 log "Installing Claude (desktop)..."
 if ! command -v claude-desktop &> /dev/null && ! dpkg -l claude-desktop &>/dev/null; then
-  curl -fsSL https://aaddrick.github.io/claude-desktop-debian/public-key.gpg \
-    | gpg --dearmor --yes -o /usr/share/keyrings/claude-desktop.gpg
-  echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=$(dpkg --print-architecture)] https://aaddrick.github.io/claude-desktop-debian stable main" \
+  curl -fsSLo /usr/share/keyrings/claude-desktop-archive-keyring.asc \
+    https://downloads.claude.ai/claude-desktop/key.asc
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/claude-desktop-archive-keyring.asc] https://downloads.claude.ai/claude-desktop/apt/stable stable main" \
     | tee /etc/apt/sources.list.d/claude-desktop.list > /dev/null
+  repair_spotify_apt
   apt update
   apt install -y claude-desktop
 else
   log "Claude desktop already installed"
+fi
+
+log "Installing ChatGPT desktop..."
+if ! dpkg -l chatgpt &>/dev/null; then
+  case "$(dpkg --print-architecture)" in
+    amd64) CHATGPT_DEB="chatgpt_amd64.deb" ;;
+    arm64) CHATGPT_DEB="chatgpt_arm64.deb" ;;
+    *) warn "ChatGPT desktop has no package for $(dpkg --print-architecture)"; CHATGPT_DEB="" ;;
+  esac
+  if [ -n "${CHATGPT_DEB}" ]; then
+    if curl -fL -o /tmp/chatgpt.deb \
+      "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/${CHATGPT_DEB}"; then
+      apt-get install -y /tmp/chatgpt.deb || warn "ChatGPT desktop install failed"
+      rm -f /tmp/chatgpt.deb
+    else
+      warn "Could not download ChatGPT desktop"
+      rm -f /tmp/chatgpt.deb
+    fi
+  fi
+else
+  log "ChatGPT desktop already installed"
 fi
 
 log "Installing NoMachine..."
@@ -822,8 +931,7 @@ echo "  1. Log out and back in for Docker group permissions"
 echo "  2. Reboot to activate the low-latency kernel"
 echo "  3. Configure ~/.config/starship.toml"
 echo "  4. Create ~/.envrc files for project-specific env vars"
-echo "  5. Download Cursor editor from https://www.cursor.com/"
-echo "  6. Download and install Nerd Fonts"
+echo "  5. Download and install Nerd Fonts"
 echo ""
 echo "If this machine runs the Mythos AV stack, run the Mythos installer next:"
 echo "  cd ~/mythos && python3 install.py"

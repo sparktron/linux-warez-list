@@ -1,6 +1,6 @@
 # linux-warez-list
 
-> Complete Ubuntu dev environment — 108 packages, extensions, and tools across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
+> Complete Ubuntu dev environment — 106 packages, extensions, and tools across system tools, languages, CLI utilities, security, and desktop apps. Pick exactly what you want with an interactive TUI or run the headless script to install everything.
 
 ---
 
@@ -26,7 +26,7 @@ tab-separated: `status`, `name`, `detail`, where `status` is `ok`, `fail`,
 
 ## Interactive Installer
 
-A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 108 packages, extensions, and tools by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://github.com/ratatui-org/ratatui). Browse all 106 packages, extensions, and tools by category, read descriptions, and toggle exactly what you want — nothing runs until you confirm.
 
 ### Package selection
 
@@ -65,7 +65,7 @@ Package rows are colour-coded by install method:
 
 ---
 
-## Packages (84 total)
+## Packages (106 total)
 
 ### System Tools
 | Package | Method |
@@ -73,7 +73,9 @@ Package rows are colour-coded by install method:
 | build-essential | apt |
 | git | apt |
 | gh (GitHub CLI) | script |
-| linux-lowlatency (kernel) | apt |
+| Ubuntu 22.04 lowlatency kernel | apt |
+| Ubuntu 24.04 lowlatency kernel | apt |
+| GRUB Customizer | script |
 | snapd | script |
 | curl | apt |
 | wget | apt |
@@ -87,6 +89,7 @@ Package rows are colour-coded by install method:
 | npm (latest) | script |
 | Bun | script |
 | Rust (via rustup) | script |
+| rust-analyzer (LSP) | rustup component |
 | GCC + G++ + GDB | apt |
 | Clang + LLVM | apt |
 
@@ -95,10 +98,10 @@ Package rows are colour-coded by install method:
 |---------|--------|
 | ripgrep (rg) | apt |
 | fd | script |
-| direnv | apt |
 | jq | apt |
 | SQLite3 | apt |
 | make | apt |
+| Just (task runner) | cargo |
 | CMake | apt |
 | Valgrind | apt |
 | bat | apt |
@@ -106,7 +109,6 @@ Package rows are colour-coded by install method:
 | FFmpeg | apt |
 | ImageMagick | apt |
 | fzf | apt |
-| hstr | apt |
 | rsync | apt |
 | zstd | apt |
 | detox | apt |
@@ -140,20 +142,17 @@ Package rows are colour-coded by install method:
 | OpenSSH Server (sshd) | apt |
 | net-tools | apt |
 | WireGuard Tools (wg) | apt |
+| VeraCrypt | apt |
 
 ### Terminal & Shell
 | Package | Method |
 |---------|--------|
 | bash-completion | apt |
+| direnv | apt |
+| hstr | apt |
 | GNOME Terminal | apt |
 | tmux | apt |
-
-### Rust Tools
-| Package | Method |
-|---------|--------|
 | Starship (shell prompt) | cargo |
-| Just (task runner) | cargo |
-| rust-analyzer (LSP) | rustup component |
 
 ### Python Packages
 | Package | Method |
@@ -173,11 +172,14 @@ Package rows are colour-coded by install method:
 | fonts-dejavu | apt |
 | FiraCode Nerd Font | script |
 
-### Claude & AI Tools
+### AI Tools
 | Tool | Method |
 |------|--------|
-| Claude Desktop | apt |
 | Claude Code (CLI) | npm |
+| ChatGPT (CLI) | script |
+| Cursor | script |
+| Claude Desktop | script |
+| ChatGPT (desktop) | script |
 | Claude in Chrome (extension) | manual |
 | Compound Engineering Plugin | manual |
 | jcodemunch-mcp (MCP server) | pip/uvx |
@@ -190,6 +192,7 @@ Package rows are colour-coded by install method:
 ### GNOME Shell Extensions
 | Extension | Status |
 |-----------|--------|
+| GNOME Shell Extension Manager | apt |
 | Ubuntu Dock | enabled |
 | Ubuntu AppIndicators | enabled |
 | Desktop Icons NG (DING) | enabled |
@@ -216,17 +219,13 @@ Package rows are colour-coded by install method:
 | Discord | script |
 | Slack | snap |
 | SimpleScreenRecorder | apt |
-| VeraCrypt | apt |
 | NoMachine | script |
 | GNOME Tweaks | apt |
-| GNOME Shell Extension Manager | apt |
-| GRUB Customizer | script |
 | Solaar | apt |
 | Meld | apt |
 | Peek | apt |
 | Google Chrome | script |
 | Signal | script |
-| Claude (desktop) | script |
 
 ---
 
