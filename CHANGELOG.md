@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.2] — 2026-09-26
+
+### Fixes
+
+#### Ubuntu 24.04 installs Python 3.10, and pip packages no longer uninstall Debian modules
+
+**Motivation:** A 0.13.1 TUI run exited 100 on Python 3.10 and exited 1 on Pydantic and jcodemunch-mcp. `apt-cache show python3.10` is a pattern match, so it hit `libpython3.10-stdlib` and skipped the deadsnakes PPA. Root `pip install` then tried to replace Debian `typing-extensions` 4.10.0, which has no RECORD file, and pip exited 1. Pydantic needs `typing-extensions>=4.14.1`. jcodemunch-mcp pulls that same Pydantic.
+
+**What it does:** The Python 3.10 check uses `?exact-name(python3.10)` before adding deadsnakes. pip packages, including jcodemunch-mcp, install with `--user` as the invoking user, so a newer typing-extensions lands in `~/.local` beside the Debian copy.
+
+---
+
 ## [0.13.1] — 2026-09-26
 
 ### Fixes

@@ -424,7 +424,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          comes from the deadsnakes PPA because it is not in the default archive. \
          python3-pip is always installed so later pip packages can run.",
         InstallCmd::Script(
-            "if ! apt-cache show python3.10 >/dev/null 2>&1; then \
+            "if ! apt-cache show '?exact-name(python3.10)' >/dev/null 2>&1; then \
                add-apt-repository -y ppa:deadsnakes/ppa && apt update; \
              fi \
              && apt install -y python3.10 python3.10-venv python3.10-dev \
@@ -1866,7 +1866,12 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          ['--from', 'git+https://github.com/jgravelle/jcodemunch-mcp.git', 'jcodemunch-mcp'].",
         InstallCmd::Script(
             "apt install -y python3-pip \
-             && python3 -m pip install --break-system-packages jcodemunch-mcp",
+             && REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && if [ \"$(id -u)\" -eq 0 ]; then \
+                  sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages jcodemunch-mcp; \
+                else \
+                  python3 -m pip install --user --break-system-packages jcodemunch-mcp; \
+                fi",
         ),
         false,
         true,
@@ -1911,7 +1916,7 @@ fn cmd_short(cmd: &InstallCmd) -> String {
         InstallCmd::Cargo(name) => format!("cargo install {}", name),
         InstallCmd::Pip(pkgs) => {
             format!(
-                "python3 -m pip install --break-system-packages {}",
+                "python3 -m pip install --user --break-system-packages {}",
                 pkgs.join(" ")
             )
         }
@@ -2700,10 +2705,14 @@ fn get_snap_installed() -> HashSet<String> {
 
 fn get_pip_installed() -> HashSet<String> {
     let mut set = HashSet::new();
-    if let Ok(out) = Command::new("pip3")
-        .args(["list", "--format=columns"])
-        .output()
-    {
+    // List packages as the invoking user. A root `pip list` hides ~/.local,
+    // which is where these installs land so they do not uninstall Debian modules.
+    let script = "if [ \"$(id -u)\" -eq 0 ]; then \
+        sudo -u \"${SUDO_USER:-$USER}\" python3 -m pip list --format=columns; \
+      else \
+        python3 -m pip list --format=columns; \
+      fi";
+    if let Ok(out) = Command::new("sh").args(["-c", script]).output() {
         if out.status.success() {
             for line in String::from_utf8_lossy(&out.stdout).lines().skip(2) {
                 if let Some(name) = line.split_whitespace().next() {
@@ -2724,7 +2733,10 @@ fn cli_installed(names: &[&str]) -> bool {
             format!("{home}/.local/bin/{name}"),
             format!("{home}/.cargo/bin/{name}"),
         ];
-        if candidates.iter().any(|path| std::path::Path::new(path).is_file()) {
+        if candidates
+            .iter()
+            .any(|path| std::path::Path::new(path).is_file())
+        {
             return true;
         }
         if sh_check(&format!("command -v {name} >/dev/null 2>&1")) {
@@ -2783,7 +2795,13 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         "ChatGPT  (CLI)" => cli_installed(&["codex"]),
         "Claude Code  (CLI)" => cli_installed(&["claude"]),
         "Obsidian" => apt.contains("obsidian"),
-        "jcodemunch-mcp" => sh_check("pip3 show jcodemunch-mcp 2>/dev/null | grep -q Name"),
+        "jcodemunch-mcp" => sh_check(
+            "if [ \"$(id -u)\" -eq 0 ]; then \
+               sudo -u \"${SUDO_USER:-$USER}\" python3 -m pip show jcodemunch-mcp >/dev/null 2>&1; \
+             else \
+               python3 -m pip show jcodemunch-mcp >/dev/null 2>&1; \
+             fi",
+        ),
         "memory-mcp  (local)" => {
             sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\"")
         }
@@ -3200,9 +3218,19 @@ fn run_install(packages: Vec<Package>) {
                     .status()
             }
             InstallCmd::Pip(pkgs) => {
+                // Install into the invoking user's ~/.local. Root pip installs
+                // into /usr/local and tries to uninstall Debian modules that
+                // have no RECORD file (typing-extensions 4.10.0 on Ubuntu 24.04),
+                // which exits 1 for any package that needs a newer copy.
                 let script = format!(
                     "python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
-                     python3 -m pip install --break-system-packages {}",
+                     REAL_USER=\"${{SUDO_USER:-$USER}}\"; \
+                     if [ \"$(id -u)\" -eq 0 ]; then \
+                       sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages {}; \
+                     else \
+                       python3 -m pip install --user --break-system-packages {}; \
+                     fi",
+                    pkgs.join(" "),
                     pkgs.join(" ")
                 );
                 Command::new("sh").args(["-c", &script]).status()

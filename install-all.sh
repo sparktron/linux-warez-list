@@ -369,7 +369,9 @@ echo "🔧 Installing programming languages..."
 
 log "Installing Python 3.10 and dev tools..."
 # Ubuntu 24.04 dropped Python 3.10 from the archive. deadsnakes still publishes it.
-if ! apt-cache show python3.10 >/dev/null 2>&1; then
+# apt-cache treats the argument as a pattern, so `python3.10` matches
+# libpython3.10-stdlib and the check succeeds even when Python 3.10 is absent.
+if ! apt-cache show '?exact-name(python3.10)' >/dev/null 2>&1; then
   add-apt-repository -y ppa:deadsnakes/ppa
   apt update
 fi
@@ -738,11 +740,13 @@ echo "🐍 Installing Python packages..."
 #
 # We pin these to Mythos-compatible versions to avoid surprises.
 
-log "Upgrading pip..."
-python3 -m pip install --upgrade pip --break-system-packages
+log "Upgrading pip for ${REAL_USER}..."
+sudo -u "${REAL_USER}" python3 -m pip install --user --upgrade pip --break-system-packages
 
-log "Installing Python packages (system-wide)..."
-python3 -m pip install --break-system-packages \
+# User site, not /usr/local. Root pip tries to uninstall Debian typing-extensions
+# (no RECORD file) and exits 1 as soon as a package needs a newer version.
+log "Installing Python packages for ${REAL_USER}..."
+sudo -u "${REAL_USER}" python3 -m pip install --user --break-system-packages \
   pytest \
   pytest-mock \
   pytest-cov \

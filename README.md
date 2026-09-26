@@ -2,7 +2,7 @@
 
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/download/desktop)
 [![x86-64](https://img.shields.io/badge/arch-x86--64-555)](https://ubuntu.com/)
-[![installer v0.13.1](https://img.shields.io/badge/installer-v0.13.1-blue)](CHANGELOG.md)
+[![installer v0.13.2](https://img.shields.io/badge/installer-v0.13.2-blue)](CHANGELOG.md)
 [![107 packages](https://img.shields.io/badge/catalog-107%20packages-success)](#catalog)
 [![Rust TUI](https://img.shields.io/badge/TUI-ratatui-000?logo=rust&logoColor=white)](https://ratatui.rs/)
 
@@ -372,4 +372,4 @@ Leave `SQLAlchemy==2.0.19` and `requests==2.31.0` pinned. Leave FFmpeg on the Ub
 
 ---
 
-**Last updated:** 2026-09-26 · [v0.13.1](CHANGELOG.md)
+**Last updated:** 2026-09-26 · [v0.13.2](CHANGELOG.md)

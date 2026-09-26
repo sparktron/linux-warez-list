@@ -990,7 +990,7 @@
 - **Installed:** Yes (v1.108.27 via pip; run via `uvx` from Claude Code)
 - **Usage:** Lets Claude Code parse and navigate codebases at the AST level without reading full file contents — reduces token usage on large repos
 - **Config:** `~/.claude/settings.json` → `mcpServers.jcodemunch`
-- **Install:** `sudo apt install python3-pip && python3 -m pip install --break-system-packages jcodemunch-mcp`, then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
+- **Install:** `sudo apt install python3-pip && python3 -m pip install --user --break-system-packages jcodemunch-mcp`, then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
   ```json
   "jcodemunch": {
     "command": "uvx",
