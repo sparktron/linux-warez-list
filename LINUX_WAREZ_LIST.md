@@ -49,7 +49,7 @@
 ### Linux kernel (Ubuntu 22.04 or 24.04)
 - **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** `install-all.sh` reads `VERSION_ID` from `/etc/os-release` and installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04 (7.0 series). It does not install the other release's kernel. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. The TUI still lists both kernels as optional entries — select the one that matches the machine.
+- **Usage:** Both installers read `VERSION_ID` from `/etc/os-release`. `install-all.sh` installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04. It does not install the other release's kernel. The TUI lists both kernels and locks the one that does not match the running release. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. On 24.04 the HWE package does not install a separate kernel image. It keeps the generic 7.0 kernel and writes `preempt=full rcu_nocbs=all` to `/etc/default/grub.d/99-lowlatency.cfg`, so GRUB Customizer will not list a lowlatency entry. After reboot, check `cat /proc/cmdline`.
 - **Install:** Automatic in `install-all.sh` for the running Ubuntu release, or the matching TUI entry
 - **Note:** Reboot required after installation
 - **Version Check:** `uname -r`
@@ -354,7 +354,7 @@
 - **What:** Cross-platform TUI system resource monitor
 - **Installed:** Yes (deb)
 - **Usage:** Monitor CPU per-core, memory, swap, disk I/O, network, and processes in one interactive terminal UI
-- **Install:** Download the musl (statically-linked) `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom-musl_*_amd64.deb`) and `sudo apt-get install -y ./bottom-musl_*_amd64.deb`. The musl build has no `libc6` dependency, so it installs on Ubuntu 22.04 (glibc 2.35); the default gnu build pins `libc6 (>= 2.39)` and will break apt on jammy.
+- **Install:** Download the musl (statically-linked) `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom-musl_*_amd64.deb`) and `sudo apt install -y ./bottom-musl_*_amd64.deb`. The musl build has no `libc6` dependency, so it installs on Ubuntu 22.04 (glibc 2.35); the default gnu build pins `libc6 (>= 2.39)` and will break apt on jammy.
 - **Version Check:** `btm --version`
 - **Usage:** Launch with `btm`; press `?` for help
 
@@ -560,7 +560,7 @@
 - **What:** Team messaging and collaboration platform
 - **Installed:** Yes
 - **Usage:** Workplace communication, notifications
-- **Install:** `snap install slack`, then `sudo apt-get remove -y slack-desktop` if the old vendor .deb is still installed
+- **Install:** `snap install slack`, then `sudo apt remove -y slack-desktop` if the old vendor .deb is still installed
 - **Usage:** Desktop application
 
 ### Spotify
@@ -949,7 +949,7 @@
 ### ChatGPT Desktop
 - **What:** OpenAI ChatGPT desktop app for Linux (preview)
 - **Installed:** Optional
-- **Usage:** Native ChatGPT workspace with local projects and Codex. Preview supports Ubuntu 24.04 and 26.04, x64 and ARM64. The .deb adds OpenAI's apt repository for later upgrades.
+- **Usage:** Native ChatGPT workspace with local projects and Codex. Preview supports Ubuntu 24.04 and 26.04, x64 and ARM64. The TUI locks this entry on any other release. The .deb adds OpenAI's apt repository for later upgrades.
 - **Install:** `curl -fL -o /tmp/chatgpt.deb https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb && sudo apt install -y /tmp/chatgpt.deb`
 - **Version Check:** `chatgpt` (or ChatGPT → About)
 
@@ -990,28 +990,13 @@
 - **Installed:** Yes (v1.108.27 via pip; run via `uvx` from Claude Code)
 - **Usage:** Lets Claude Code parse and navigate codebases at the AST level without reading full file contents — reduces token usage on large repos
 - **Config:** `~/.claude/settings.json` → `mcpServers.jcodemunch`
-- **Install:** `sudo apt install python3-pip && python3 -m pip install --break-system-packages jcodemunch-mcp`, then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
+- **Install:** `sudo apt install python3-pip && python3 -m pip install --user --break-system-packages jcodemunch-mcp`, then run `jcodemunch-mcp init` in each project root, then add to `~/.claude/settings.json`:
   ```json
   "jcodemunch": {
     "command": "uvx",
     "args": ["--from", "git+https://github.com/jgravelle/jcodemunch-mcp.git", "jcodemunch-mcp"]
   }
   ```
-
-### memory (local MCP)
-- **What:** Local persistent memory MCP server — gives Claude Desktop a read/write key-value store that persists across sessions
-- **Installed:** Yes (custom Python script at `~/repos/memory-mcp/memory_mcp.py`)
-- **Usage:** Claude Desktop can store and recall facts, preferences, and context across conversations without relying on cloud memory
-- **Config:** `~/.config/Claude/claude_desktop_config.json` → `mcpServers.memory`
-- **Install:** Clone/copy `memory_mcp.py`, install `mcp` Python package (`pip install mcp`), then add to Claude Desktop config:
-  ```json
-  "memory": {
-    "command": "/usr/bin/python3",
-    "args": ["/home/mythos/repos/memory-mcp/memory_mcp.py"]
-  }
-  ```
-
----
 
 ### Cloud MCP Integrations (configured via claude.ai — no local install)
 

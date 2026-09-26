@@ -2,11 +2,11 @@
 
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/download/desktop)
 [![x86-64](https://img.shields.io/badge/arch-x86--64-555)](https://ubuntu.com/)
-[![installer v0.13.0](https://img.shields.io/badge/installer-v0.13.0-blue)](CHANGELOG.md)
-[![107 packages](https://img.shields.io/badge/catalog-107%20packages-success)](#catalog)
+[![installer v0.14.1](https://img.shields.io/badge/installer-v0.14.1-blue)](CHANGELOG.md)
+[![106 packages](https://img.shields.io/badge/catalog-106%20packages-success)](#catalog)
 [![Rust TUI](https://img.shields.io/badge/TUI-ratatui-000?logo=rust&logoColor=white)](https://ratatui.rs/)
 
-A curated Ubuntu dev environment: **107** packages, extensions, and tools across system utilities, languages, the CLI, security, desktop apps, and AI tools. Pick exactly what you want in an interactive TUI, or install the whole set with one script.
+A curated Ubuntu dev environment: **106** packages, extensions, and tools across system utilities, languages, the CLI, security, desktop apps, and AI tools. Pick exactly what you want in an interactive TUI, or install the whole set with one script.
 
 The long-form inventory, with install commands and notes, lives in [`LINUX_WAREZ_LIST.md`](LINUX_WAREZ_LIST.md). Release history is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -36,9 +36,9 @@ sudo ./installer
 sudo bash install-all.sh
 ```
 
-Ubuntu **22.04 LTS**, x86-64. Run with `sudo` so root-only packages unlock. `install-all.sh` installs only the lowlatency kernel for the running Ubuntu release (`linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`). The TUI lists both — pick the one that matches the machine. Do not install the unversioned `linux-lowlatency` package; on 24.04 it tracks the older 6.8 GA kernel.
+Ubuntu **22.04 LTS**, x86-64. Run with `sudo` so root-only packages unlock. Both installers read `VERSION_ID` from `/etc/os-release`. `install-all.sh` installs only the lowlatency kernel for that release (`linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`). The TUI locks the other release's kernel, and locks ChatGPT desktop on anything other than 24.04 or 26.04. Do not install the unversioned `linux-lowlatency` package; on 24.04 it tracks the older 6.8 GA kernel.
 
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) and the [ChatGPT CLI](https://github.com/openai/codex) install first and stay selected. Space and “select none” do not turn them off.
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) and the [ChatGPT CLI](https://github.com/openai/codex) are checked only when they are not already installed. If they are already on the machine, they stay unchecked and the installer does not run them unless you check them yourself. When they are checked, they install first.
 
 Each run writes a result log of successful and failed attempts to `/var/log/linux-warez-list/install-YYYYMMDD-HHMMSS.log`. If that directory is not writable, the log goes to `~/.local/state/linux-warez-list/`. Lines are tab-separated: `status`, `name`, `detail`, where `status` is `ok`, `fail`, `error`, `skip`, or `warn`. The footer prints the counts and the log path.
 
@@ -48,11 +48,11 @@ Each run writes a result log of successful and failed attempts to `/var/log/linu
 
 ## 🎛️ Interactive installer
 
-A Rust TUI built with [ratatui](https://ratatui.rs/). Browse all 107 entries by category, read the description on the right, and toggle exactly what you want. Nothing runs until you confirm.
+A Rust TUI built with [ratatui](https://ratatui.rs/). Browse all 106 entries by category, read the description on the right, and toggle exactly what you want. Nothing runs until you confirm.
 
 ### Package selection
 
-Packages that need `sudo` are locked and dimmed when the installer is not root.
+Packages that need `sudo` are locked and dimmed when the installer is not root. Packages for a different Ubuntu release are locked the same way, with the release in the badge (`[22.04]`, `[24/26]`).
 
 ![Package selection screen](docs/screenshot-select.png)
 
@@ -91,7 +91,7 @@ Rows are colour-coded by install method:
 
 ## 📦 Catalog
 
-107 entries, in the same order as the TUI. Names link to the upstream project.
+106 entries, in the same order as the TUI. Names link to the upstream project.
 
 <a id="system-tools"></a>
 
@@ -103,7 +103,7 @@ Rows are colour-coded by install method:
 | [git](https://git-scm.com/) | Distributed version control | apt |
 | [gh](https://cli.github.com/) | GitHub CLI | script |
 | [Ubuntu 22.04 lowlatency kernel](https://packages.ubuntu.com/jammy/linux-lowlatency-hwe-22.04) | HWE lowlatency kernel for 22.04 | apt |
-| [Ubuntu 24.04 lowlatency kernel](https://packages.ubuntu.com/noble/linux-lowlatency-hwe-24.04) | HWE lowlatency kernel for 24.04 (7.0 series) | apt |
+| [Ubuntu 24.04 lowlatency kernel](https://packages.ubuntu.com/noble/linux-lowlatency-hwe-24.04) | Generic 7.0 HWE kernel plus `preempt=full` (no separate GRUB entry) | apt |
 | [GRUB Customizer](https://launchpad.net/grub-customizer) | Graphical GRUB menu editor | script |
 | [snapd](https://snapcraft.io/docs/installing-snapd) | Snap daemon, required before snap apps | script |
 | [curl](https://curl.se/) | URL transfer tool | apt |
@@ -286,7 +286,6 @@ Needs [snapd](#system-tools). The headless script asks before installing snaps.
 | [Claude](https://claude.ai/download) | Claude desktop | script |
 | [ChatGPT](https://chatgpt.com/) | ChatGPT desktop | script |
 | [jcodemunch-mcp](https://pypi.org/project/jcodemunch-mcp/) | Code-search MCP server | script |
-| [memory-mcp](https://github.com/dylansparks/memory-mcp) | Local memory MCP server | script |
 
 Editor extensions and cloud MCP servers (Gmail, Calendar, Drive, Notion) are documented in [`LINUX_WAREZ_LIST.md`](LINUX_WAREZ_LIST.md). They are not installer entries.
 
@@ -372,4 +371,4 @@ Leave `SQLAlchemy==2.0.19` and `requests==2.31.0` pinned. Leave FFmpeg on the Ub
 
 ---
 
-**Last updated:** 2026-09-24 · [v0.13.0](CHANGELOG.md)
+**Last updated:** 2026-09-26 · [v0.14.1](CHANGELOG.md)

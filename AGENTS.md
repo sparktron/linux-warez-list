@@ -167,14 +167,14 @@ packages have version pins that must not conflict:
 | SQLAlchemy==2.0.19 | Mythos `requirements.txt` pin | Pip install in both |
 | requests==2.31.0 | Mythos `requirements.txt` pin | Pip install in both |
 | FFmpeg from apt only (4.4.x) | PPA/snap versions ship different libavcodec SO versions | Description notes |
-| Kernel release | Production vessels need lowlatency. Install `linux-lowlatency-hwe-22.04` on Ubuntu 22.04 or `linux-lowlatency-hwe-24.04` on Ubuntu 24.04. Do not install both, and do not install unversioned `linux-lowlatency` (6.8 GA on 24.04). The headless script reads `/etc/os-release` and installs only the matching package. | Both installers |
+| Kernel release | Production vessels need lowlatency. Install `linux-lowlatency-hwe-22.04` on Ubuntu 22.04 or `linux-lowlatency-hwe-24.04` on Ubuntu 24.04. Do not install both, and do not install unversioned `linux-lowlatency` (6.8 GA on 24.04). Both installers read `VERSION_ID` from `/etc/os-release`. The headless script installs only the matching package. The TUI locks the other release's kernel, and locks ChatGPT desktop except on 24.04 and 26.04. | Both installers |
 
 When adding or updating Python packages, check `~/mythos/third_party/rules_python/requirements.txt`
 for version conflicts.
 
 ## Package Count
 
-README and TUI both reference the total package count (currently 107). Update
+README and TUI both reference the total package count (currently 106). Update
 the count in:
 
 - `README.md` — the total count in the header and anywhere it appears in prose
@@ -202,12 +202,15 @@ the TUI. Each element:
   "cmd_type":         "apt",
   "cmd_value":        ["fzf"],
   "requires_root":    true,
-  "default_selected": false
+  "default_selected": false,
+  "ubuntu_versions":  null
 }
 ```
 
 `cmd_value` is a JSON array for `apt`/`pip`, or a JSON string for
-`sh`/`cargo`/`snap`.
+`sh`/`cargo`/`snap`. `ubuntu_versions` is `null` when the package installs on
+every Ubuntu release, or a list of `VERSION_ID` strings. The TUI locks the
+package when the running release is not in that list.
 
 Uses: `docs/gen_screenshots.py` calls this at runtime. Any future tooling
 (CI diff checks, README table generators, package count validation) should

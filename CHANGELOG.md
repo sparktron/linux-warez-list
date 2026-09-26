@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.14.1] — 2026-09-26
+
+### Packages
+
+#### memory-mcp is no longer an installer entry
+
+**Motivation:** The GitHub file the entry downloaded returns 404, and installing `mcp` as root failed while trying to replace Debian `typing-extensions`. The script still reported success.
+
+**What it does:** `memory-mcp (local)` is removed from the TUI, the README catalog, and `LINUX_WAREZ_LIST.md`. The catalog is 106 packages.
+
+---
+
+## [0.14.0] — 2026-09-26
+
+### Selection
+
+#### Packages for another Ubuntu release stay locked
+
+**Motivation:** The TUI listed both lowlatency kernels and left the choice to the operator. Selecting `linux-lowlatency-hwe-22.04` on Ubuntu 24.04 (or the reverse) installs the wrong kernel. ChatGPT desktop's preview only supports 24.04 and 26.04.
+
+**What it does:** On startup the TUI reads `VERSION_ID` from `/etc/os-release`. A package tagged for other releases is dimmed, cannot be toggled, and is skipped by select-all. The row badge shows the release it is for (`[22.04]`, `[24/26]`). The title bar names the running release. `--dump-json` adds `ubuntu_versions` (`null` when the package is for every release). The headless script already installed only the matching kernel.
+
+---
+
+## [0.13.2] — 2026-09-26
+
+### Fixes
+
+#### Ubuntu 24.04 installs Python 3.10, and pip packages no longer uninstall Debian modules
+
+**Motivation:** A 0.13.1 TUI run exited 100 on Python 3.10 and exited 1 on Pydantic and jcodemunch-mcp. `apt-cache show python3.10` is a pattern match, so it hit `libpython3.10-stdlib` and skipped the deadsnakes PPA. Root `pip install` then tried to replace Debian `typing-extensions` 4.10.0, which has no RECORD file, and pip exited 1. Pydantic needs `typing-extensions>=4.14.1`. jcodemunch-mcp pulls that same Pydantic.
+
+**What it does:** The Python 3.10 check uses `?exact-name(python3.10)` before adding deadsnakes. pip packages, including jcodemunch-mcp, install with `--user` as the invoking user, so a newer typing-extensions lands in `~/.local` beside the Debian copy.
+
+---
+
+## [0.13.1] — 2026-09-26
+
+### Fixes
+
+#### apt update no longer dies on a literal `$(ARCH)`, and Claude Code installs under sudo
+
+**Motivation:** A 0.13.0 TUI run recorded `apt update` exit 100, then FiraCode and every GNOME extension failed with the same code because their scripts start with `apt-get`. Claude Code exited 243. The NVIDIA container toolkit source on this machine still contains `$(ARCH)`, which apt does not expand, so that URI 404s. npm run via sudo drops to nobody and cannot write the global prefix; that EACCES is exit 243.
+
+**What it does:** Before `apt update`, both installers replace a literal `$(ARCH)` in apt sources with the machine architecture. Claude Code's npm install uses `--unsafe-perm`. The Nerd Font and GNOME extension scripts skip `apt` when unzip or pip is already available, and the font is installed into the invoking user's home. If Claude Code or the ChatGPT CLI is already installed, it stays unchecked and is not installed again unless you check it. The Ubuntu 24.04 lowlatency package is documented as boot settings on the generic 7.0 kernel (`preempt=full rcu_nocbs=all`), not as a separate kernel image in GRUB Customizer.
+
+---
+
 ## [0.13.0] — 2026-09-24
 
 ### Packages

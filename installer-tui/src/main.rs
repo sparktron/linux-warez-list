@@ -40,6 +40,9 @@ struct Package {
     selected: bool,
     requires_root: bool,
     requires_pkg: Option<&'static str>,
+    /// Ubuntu `VERSION_ID` values this package may be installed on.
+    /// `None` means every release.
+    only_ubuntu: Option<&'static [&'static str]>,
     installed: bool,
 }
 
@@ -64,12 +67,19 @@ struct App {
     screen: Screen,
     confirm_scroll: u16,
     is_root: bool,
+    ubuntu_version: Option<String>,
 }
 
 impl App {
     fn new() -> Self {
         let (mut packages, entries) = build_data();
         check_all_installed(&mut packages);
+        let ubuntu_version = ubuntu_version_id();
+        for pkg in &mut packages {
+            if !release_allowed(ubuntu_version.as_deref(), pkg.only_ubuntu) {
+                pkg.selected = false;
+            }
+        }
         let cursor = entries
             .iter()
             .position(|e| matches!(e, Entry::Pkg(_)))
@@ -84,7 +94,12 @@ impl App {
             screen: Screen::Select,
             confirm_scroll: 0,
             is_root: is_root(),
+            ubuntu_version,
         }
+    }
+
+    fn version_locked(&self, pkg: &Package) -> bool {
+        !release_allowed(self.ubuntu_version.as_deref(), pkg.only_ubuntu)
     }
 
     fn current_pkg_idx(&self) -> Option<usize> {
@@ -106,8 +121,12 @@ impl App {
             let dep_locked = self.packages[i]
                 .requires_pkg
                 .map_or(false, |dep| !self.dep_satisfied(dep));
-            if !root_locked && !dep_locked && !self.packages[i].installed {
-                if is_always_installed(self.packages[i].name) && self.packages[i].selected {
+            let version_locked = self.version_locked(&self.packages[i]);
+            if !root_locked && !dep_locked && !version_locked && !self.packages[i].installed {
+                if is_always_installed(self.packages[i].name)
+                    && self.packages[i].selected
+                    && !self.packages[i].installed
+                {
                     return;
                 }
                 self.packages[i].selected = !self.packages[i].selected;
@@ -132,6 +151,9 @@ impl App {
             if self.packages[i].installed {
                 continue;
             }
+            if self.version_locked(&self.packages[i]) {
+                continue;
+            }
             if !self.is_root && self.packages[i].requires_root {
                 continue;
             }
@@ -150,7 +172,7 @@ impl App {
 
     fn select_none(&mut self) {
         for p in &mut self.packages {
-            p.selected = is_always_installed(p.name);
+            p.selected = is_always_installed(p.name) && !p.installed;
         }
     }
 
@@ -247,6 +269,7 @@ impl DataBuilder {
             selected,
             requires_root,
             requires_pkg: None,
+            only_ubuntu: None,
             installed: false,
         });
         self.entries.push(Entry::Pkg(idx));
@@ -256,6 +279,14 @@ impl DataBuilder {
     fn dep(&mut self, pkg_name: &'static str) -> &mut Self {
         if let Some(p) = self.packages.last_mut() {
             p.requires_pkg = Some(pkg_name);
+        }
+        self
+    }
+
+    /// Restrict the package just added to these Ubuntu `VERSION_ID` values.
+    fn only_ubuntu(&mut self, versions: &'static [&'static str]) -> &mut Self {
+        if let Some(p) = self.packages.last_mut() {
+            p.only_ubuntu = Some(versions);
         }
         self
     }
@@ -326,17 +357,21 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         true,
     );
+    b.only_ubuntu(&["22.04"]);
 
     b.pkg(
         "Ubuntu 24.04 lowlatency kernel",
-        "Low-latency hardware-enablement kernel for Ubuntu 24.04 \
-         (linux-lowlatency-hwe-24.04). On 24.04 this tracks the 7.0 series, matching \
-         a current HWE desktop instead of the 6.8 GA kernel from unversioned \
-         linux-lowlatency. A reboot is required. Verify with: uname -r",
+        "Low-latency boot settings for the Ubuntu 24.04 HWE kernel \
+         (linux-lowlatency-hwe-24.04). On 24.04 this does not install a separate \
+         kernel image, so GRUB Customizer will not list a lowlatency entry. It keeps \
+         the generic 7.0 kernel and adds preempt=full rcu_nocbs=all via \
+         /etc/default/grub.d/99-lowlatency.cfg. A reboot is required. Verify with: \
+         cat /proc/cmdline",
         InstallCmd::Apt(&["linux-lowlatency-hwe-24.04"]),
         false,
         true,
     );
+    b.only_ubuntu(&["24.04"]);
 
     b.pkg(
         "GRUB Customizer",
@@ -419,10 +454,10 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          comes from the deadsnakes PPA because it is not in the default archive. \
          python3-pip is always installed so later pip packages can run.",
         InstallCmd::Script(
-            "if ! apt-cache show python3.10 >/dev/null 2>&1; then \
-               add-apt-repository -y ppa:deadsnakes/ppa && apt-get update; \
+            "if ! apt-cache show '?exact-name(python3.10)' >/dev/null 2>&1; then \
+               add-apt-repository -y ppa:deadsnakes/ppa && apt update; \
              fi \
-             && apt-get install -y python3.10 python3.10-venv python3.10-dev \
+             && apt install -y python3.10 python3.10-venv python3.10-dev \
                   python3-pip python3-venv",
         ),
         false,
@@ -527,9 +562,9 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          from the 22.04 packages. Do NOT install a different clang as /usr/bin/clang.",
         InstallCmd::Script(
             "if apt-cache show clang-format-12 >/dev/null 2>&1; then \
-               apt-get install -y clang clang-format-12 llvm llvm-dev; \
+               apt install -y clang clang-format-12 llvm llvm-dev; \
              else \
-               apt-get install -y clang-14 llvm-14 llvm-14-dev \
+               apt install -y clang-14 llvm-14 llvm-14-dev \
                && arch=$(dpkg --print-architecture) \
                && tmp=$(mktemp -d) \
                && base=http://archive.ubuntu.com/ubuntu/pool/universe/l/llvm-toolchain-12 \
@@ -539,7 +574,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
                     clang-format-12_12.0.1-19ubuntu3_${arch}.deb; do \
                     curl -fsSL -o \"$tmp/$deb\" \"$base/$deb\"; \
                   done \
-               && apt-get install -y \"$tmp\"/*.deb \
+               && apt install -y \"$tmp\"/*.deb \
                && rm -rf \"$tmp\" \
                && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 140 \
                && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 140; \
@@ -909,13 +944,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
             // Use the musl (statically-linked) .deb: it declares no libc6
             // dependency, so it installs on any glibc. The default gnu build
             // pins libc6 (>= 2.39), newer than Ubuntu 22.04 ships (2.35), which
-            // would half-unpack and leave apt in a broken state. apt-get installs
+            // would half-unpack and leave apt in a broken state. apt installs
             // the local .deb atomically so a failure never poisons apt.
             "BTM_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest \
              | grep browser_download_url | grep 'bottom-musl_.*_amd64\\.deb' | head -1 \
              | cut -d'\"' -f4) \
              && curl -Lo /tmp/bottom.deb \"$BTM_URL\" \
-             && apt-get install -y /tmp/bottom.deb \
+             && apt install -y /tmp/bottom.deb \
              && rm -f /tmp/bottom.deb",
         ),
         false,
@@ -1100,7 +1135,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          unit193/encryption PPA.",
         InstallCmd::Script(
             "add-apt-repository -y ppa:unit193/encryption \
-             && apt-get update && apt-get install -y veracrypt",
+             && apt update && apt install -y veracrypt",
         ),
         false,
         true,
@@ -1291,21 +1326,21 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          git branch symbols, powerline arrows, devicons, Font Awesome, etc.) on top of \
          FiraCode's programming ligatures. Required for full Starship prompt glyph support \
          and any terminal theme that uses Powerline or devicon symbols. Downloads the latest \
-         release zip from GitHub, installs to ~/.local/share/fonts/, refreshes fc-cache, \
-         then sets the system monospace font and GNOME Terminal default profile font to \
-         FiraCode Nerd Font Mono 11 via gsettings.",
+         release zip from GitHub, installs to the invoking user's ~/.local/share/fonts/, \
+         refreshes fc-cache, and sets the GNOME monospace font to FiraCode Nerd Font Mono 11.",
         InstallCmd::Script(
-            "apt-get install -y unzip \
-             && curl -fLo /tmp/FiraCode.zip \
+            "command -v unzip >/dev/null 2>&1 || apt install -y unzip; \
+             REAL_USER=\"${SUDO_USER:-$USER}\"; \
+             REAL_HOME=$(getent passwd \"$REAL_USER\" | cut -d: -f6); \
+             FONT_DIR=\"$REAL_HOME/.local/share/fonts/FiraCodeNerdFont\"; \
+             curl -fLo /tmp/FiraCode.zip \
              https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip \
-             && mkdir -p ~/.local/share/fonts/FiraCodeNerdFont \
-             && unzip -o /tmp/FiraCode.zip -d ~/.local/share/fonts/FiraCodeNerdFont \
-             && fc-cache -fv \
-             && rm /tmp/FiraCode.zip \
-             && gsettings set org.gnome.desktop.interface monospace-font-name 'FiraCode Nerd Font Mono 11' \
-             && PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \"'\") \
-             && gsettings set \"org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/\" use-system-font false \
-             && gsettings set \"org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/\" font 'FiraCode Nerd Font Mono 11'",
+             && mkdir -p \"$FONT_DIR\" \
+             && unzip -o /tmp/FiraCode.zip -d \"$FONT_DIR\" \
+             && { [ \"$(id -u)\" -ne 0 ] || chown -R \"$REAL_USER:$REAL_USER\" \"$FONT_DIR\"; } \
+             && sudo -u \"$REAL_USER\" fc-cache -fv \
+             && rm -f /tmp/FiraCode.zip; \
+             sudo -u \"$REAL_USER\" gsettings set org.gnome.desktop.interface monospace-font-name 'FiraCode Nerd Font Mono 11' || true",
         ),
         false,
         false,
@@ -1390,8 +1425,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          config files. Useful for creating a minimal, distraction-free desktop layout.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              just-perfection-desktop@just-perfection",
@@ -1409,8 +1444,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          opening a browser.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              openweather-extension@jenslody.de",
@@ -1427,8 +1462,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          with a compact sparkline graph that expands on click.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              tophat@fflewddur.github.io",
@@ -1446,8 +1481,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          the desktop.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              freon@UshakovVasilii_Github.yahoo.com",
@@ -1464,8 +1499,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          a VPN tunnel is carrying traffic. Highly configurable display format.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              netspeedsimplified@prateekmedia.extension",
@@ -1482,8 +1517,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          need to open Sound Settings. Saves several clicks when toggling between devices.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              audio-selector@harald65.simon.gmail.com",
@@ -1501,8 +1536,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          Bluetooth headsets or peripherals.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              bluetooth-quick-connect@bjarosze.gmail.com",
@@ -1519,8 +1554,8 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          note. Currently disabled — enable and configure via GNOME Extension Manager.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\"; REAL_HOME=$(eval echo ~\"$REAL_USER\"); \
-             apt-get install -y python3-pip >/dev/null \
-             && sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
+             python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+             sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages -q gnome-extensions-cli \
              && \
              sudo -u \"$REAL_USER\" \"$REAL_HOME/.local/bin/gext\" -F install \
              simple-message@freddez",
@@ -1585,7 +1620,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         InstallCmd::Script(
             "snap install slack \
              && if dpkg -s slack-desktop >/dev/null 2>&1; then \
-                  apt-get remove -y slack-desktop; \
+                  apt remove -y slack-desktop; \
                 fi",
         ),
         false,
@@ -1616,13 +1651,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
             // old www.nomachine.com/download/linux&id=1 page no longer embeds the
             // .deb URL, so the previous scrape returned empty and the step failed
             // with no output. Scrape the current page for the amd64 .deb (this repo
-            // targets x86-64 Ubuntu, so amd64 is hardcoded). apt-get installs the
+            // targets x86-64 Ubuntu, so amd64 is hardcoded). apt installs the
             // local .deb atomically so a failure never poisons apt.
             "NM_URL=$(curl -fsSL 'https://download.nomachine.com/download/?id=43&platform=linux' \
              | grep -oP 'https://[^\" ]+/nomachine[^\" ]*_amd64\\.deb' | head -1) \
              && [ -n \"$NM_URL\" ] \
              && curl -fsSL \"$NM_URL\" -o /tmp/nomachine.deb \
-             && apt-get install -y /tmp/nomachine.deb \
+             && apt install -y /tmp/nomachine.deb \
              && rm -f /tmp/nomachine.deb",
         ),
         false,
@@ -1756,13 +1791,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          directly on your codebase — generate, edit, refactor, debug, and explore code \
          with full file-system access. Supports slash commands, MCP servers, hooks, and \
          multi-step autonomous tasks. Installed as a global npm package; requires Node.js. \
-         Always installed, and it runs before the other packages.",
+         Stays selected until it is installed, then it runs before the other packages.",
         InstallCmd::Script(
             "command -v node >/dev/null 2>&1 || { \
                curl -fsSL https://deb.nodesource.com/setup_20.x | bash \
-               && apt-get install -y nodejs; \
+               && apt install -y nodejs; \
              } \
-             && npm install -g @anthropic-ai/claude-code",
+             && npm install -g --unsafe-perm @anthropic-ai/claude-code",
         ),
         true,
         true,
@@ -1774,7 +1809,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          edit files, run commands, and apply patches. Official Linux install is the \
          standalone installer, which lands `codex` in the invoking user's ~/.local/bin. \
          The first run asks you to sign in with a ChatGPT account. Requires ~/.local/bin \
-         on PATH. Always installed, and it runs before the other packages.",
+         on PATH. Stays selected until it is installed, then it runs before the other packages.",
         InstallCmd::Script(
             "REAL_USER=\"${SUDO_USER:-$USER}\" \
              && sudo -u \"$REAL_USER\" bash -c \
@@ -1796,7 +1831,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
                *) echo \"unsupported architecture\" >&2; exit 1 ;; \
              esac \
              && curl -fL -o /tmp/cursor.deb \"$URL\" \
-             && apt-get install -y /tmp/cursor.deb \
+             && apt install -y /tmp/cursor.deb \
              && rm -f /tmp/cursor.deb",
         ),
         false,
@@ -1843,12 +1878,13 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
              esac \
              && curl -fL -o /tmp/chatgpt.deb \
              \"https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/${DEB}\" \
-             && apt-get install -y /tmp/chatgpt.deb \
+             && apt install -y /tmp/chatgpt.deb \
              && rm -f /tmp/chatgpt.deb",
         ),
         false,
         true,
     );
+    b.only_ubuntu(&["24.04", "26.04"]);
 
     b.pkg(
         "jcodemunch-mcp",
@@ -1860,30 +1896,16 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
          with command 'uvx' and args \
          ['--from', 'git+https://github.com/jgravelle/jcodemunch-mcp.git', 'jcodemunch-mcp'].",
         InstallCmd::Script(
-            "apt-get install -y python3-pip \
-             && python3 -m pip install --break-system-packages jcodemunch-mcp",
+            "apt install -y python3-pip \
+             && REAL_USER=\"${SUDO_USER:-$USER}\" \
+             && if [ \"$(id -u)\" -eq 0 ]; then \
+                  sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages jcodemunch-mcp; \
+                else \
+                  python3 -m pip install --user --break-system-packages jcodemunch-mcp; \
+                fi",
         ),
         false,
         true,
-    );
-
-    b.pkg(
-        "memory-mcp  (local)",
-        "Local persistent memory MCP server for Claude Desktop. Gives Claude a read/write \
-         key-value store that persists across sessions — store facts, preferences, and \
-         context without relying on cloud memory. Runs as a Python script via the MCP \
-         library. After install, add to mcpServers in ~/.config/Claude/claude_desktop_config.json \
-         with command '/usr/bin/python3' pointing to ~/repos/memory-mcp/memory_mcp.py.",
-        InstallCmd::Script(
-            "python3 -m pip install --break-system-packages mcp \
-             && REAL_HOME=$(eval echo ~\"${SUDO_USER:-$USER}\") \
-             && mkdir -p \"$REAL_HOME/repos/memory-mcp\" \
-             && curl -fsSL https://raw.githubusercontent.com/dylansparks/memory-mcp/main/memory_mcp.py \
-             -o \"$REAL_HOME/repos/memory-mcp/memory_mcp.py\" 2>/dev/null \
-             || echo 'memory_mcp.py must be placed manually at ~/repos/memory-mcp/memory_mcp.py'",
-        ),
-        false,
-        false,
     );
 
     b.build()
@@ -1906,7 +1928,7 @@ fn cmd_short(cmd: &InstallCmd) -> String {
         InstallCmd::Cargo(name) => format!("cargo install {}", name),
         InstallCmd::Pip(pkgs) => {
             format!(
-                "python3 -m pip install --break-system-packages {}",
+                "python3 -m pip install --user --break-system-packages {}",
                 pkgs.join(" ")
             )
         }
@@ -1958,8 +1980,9 @@ fn render(f: &mut Frame, app: &mut App) {
 
 fn render_select(f: &mut Frame, app: &mut App) {
     let area = f.area();
-    // Title bar is 4 rows normally; grows to 5 when not root to fit the warning line.
-    let title_h = if app.is_root { 4 } else { 5 };
+    // Borders plus two content lines, the Ubuntu release line, and the sudo
+    // warning when the installer is not root.
+    let title_h = if app.is_root { 5 } else { 6 };
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -2056,8 +2079,26 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         );
 
+    let release = app.ubuntu_version.as_deref().unwrap_or("unknown");
+    let locked_for_release = app
+        .packages
+        .iter()
+        .filter(|pkg| app.version_locked(pkg) && !pkg.installed)
+        .count();
+    let banner_text = if locked_for_release == 0 {
+        format!("  Ubuntu {release}")
+    } else if locked_for_release == 1 {
+        format!("  Ubuntu {release} — 1 package for another release is locked")
+    } else {
+        format!("  Ubuntu {release} — {locked_for_release} packages for another release are locked")
+    };
+    let banner = Line::from(Span::styled(banner_text, Style::default().fg(C_DIM)));
+
     if app.is_root {
-        f.render_widget(Paragraph::new(vec![line1, line2]).block(block), area);
+        f.render_widget(
+            Paragraph::new(vec![line1, line2, banner]).block(block),
+            area,
+        );
     } else {
         let locked_count = app.packages.iter().filter(|p| p.requires_root).count();
         let line3 = Line::from(vec![
@@ -2076,7 +2117,10 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
         ]);
-        f.render_widget(Paragraph::new(vec![line1, line2, line3]).block(block), area);
+        f.render_widget(
+            Paragraph::new(vec![line1, line2, banner, line3]).block(block),
+            area,
+        );
     }
 }
 
@@ -2128,7 +2172,8 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                         .iter()
                         .any(|p| p.name == dep && (p.installed || p.selected))
                 });
-                let locked = (!app.is_root && pkg.requires_root) || dep_locked;
+                let version_locked = app.version_locked(pkg);
+                let locked = (!app.is_root && pkg.requires_root) || dep_locked || version_locked;
                 let installed = pkg.installed;
                 let (dot, _badge, dot_col) = type_meta(&pkg.cmd);
 
@@ -2207,10 +2252,19 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     Style::default().fg(Color::White)
                 };
 
-                // Badge " [done]  " / " [sudo]  " / " [root]  " / spaces (9 chars each)
+                // Badge " [done]  " / " [22.04] " / " [sudo]  " / " [root]  " (9 chars each)
                 let (root_txt, root_sty) = if installed {
                     (
-                        " [done]  ",
+                        " [done]  ".to_string(),
+                        Style::default().fg(C_DIM).bg(if is_cursor {
+                            C_CURSOR
+                        } else {
+                            Color::Reset
+                        }),
+                    )
+                } else if version_locked {
+                    (
+                        version_badge(pkg.only_ubuntu.unwrap_or(&[])),
                         Style::default().fg(C_DIM).bg(if is_cursor {
                             C_CURSOR
                         } else {
@@ -2219,7 +2273,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else if locked {
                     (
-                        " [sudo]  ",
+                        " [sudo]  ".to_string(),
                         Style::default().fg(C_DIM).bg(if is_cursor {
                             C_CURSOR
                         } else {
@@ -2228,7 +2282,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else if pkg.requires_root {
                     (
-                        " [root]  ",
+                        " [root]  ".to_string(),
                         if is_cursor {
                             Style::default().fg(C_ROOT).bg(C_CURSOR)
                         } else {
@@ -2237,7 +2291,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else {
                     (
-                        "         ",
+                        "         ".to_string(),
                         Style::default().bg(if is_cursor { C_CURSOR } else { Color::Reset }),
                     )
                 };
@@ -2343,6 +2397,26 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(root_col).add_modifier(Modifier::BOLD),
                 ),
             ]));
+
+            if let Some(only) = pkg.only_ubuntu {
+                let (release_text, release_col) = if app.version_locked(pkg) {
+                    (
+                        release_lock_reason(app.ubuntu_version.as_deref(), only),
+                        C_WARN,
+                    )
+                } else {
+                    ("this Ubuntu release".to_string(), C_OK)
+                };
+                ls.push(Line::from(vec![
+                    Span::styled("  Ubuntu ", Style::default().fg(C_DIM)),
+                    Span::styled(
+                        release_text,
+                        Style::default()
+                            .fg(release_col)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+            }
 
             // Installed status row
             if pkg.installed {
@@ -2638,6 +2712,54 @@ fn render_confirm(f: &mut Frame, app: &App) {
 
 // ─── Installation ─────────────────────────────────────────────────────────────
 
+fn parse_version_id(text: &str) -> Option<String> {
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("VERSION_ID=") {
+            let id = rest.trim().trim_matches('"');
+            if !id.is_empty() {
+                return Some(id.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn ubuntu_version_id() -> Option<String> {
+    fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|text| parse_version_id(&text))
+}
+
+/// `only` lists the Ubuntu releases a package may be installed on.
+/// `None` means every release. An unknown running release locks a restricted package.
+fn release_allowed(running: Option<&str>, only: Option<&[&str]>) -> bool {
+    match only {
+        None => true,
+        Some(allowed) => {
+            running.is_some_and(|version| allowed.iter().any(|release| *release == version))
+        }
+    }
+}
+
+/// Nine-column list badge naming the releases a locked package is for.
+fn version_badge(only: &[&str]) -> String {
+    if only.len() == 1 && only[0].len() == 5 {
+        format!(" [{}] ", only[0])
+    } else if only.len() == 2 && only.iter().all(|version| version.len() == 5) {
+        format!(" [{}/{}] ", &only[0][..2], &only[1][..2])
+    } else {
+        " [os]    ".to_string()
+    }
+}
+
+fn release_lock_reason(running: Option<&str>, only: &[&str]) -> String {
+    let need = only.join(" or ");
+    match running {
+        Some(version) => format!("for {need} — locked on Ubuntu {version}"),
+        None => format!("for {need} — Ubuntu release unknown"),
+    }
+}
+
 fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
@@ -2695,10 +2817,14 @@ fn get_snap_installed() -> HashSet<String> {
 
 fn get_pip_installed() -> HashSet<String> {
     let mut set = HashSet::new();
-    if let Ok(out) = Command::new("pip3")
-        .args(["list", "--format=columns"])
-        .output()
-    {
+    // List packages as the invoking user. A root `pip list` hides ~/.local,
+    // which is where these installs land so they do not uninstall Debian modules.
+    let script = "if [ \"$(id -u)\" -eq 0 ]; then \
+        sudo -u \"${SUDO_USER:-$USER}\" python3 -m pip list --format=columns; \
+      else \
+        python3 -m pip list --format=columns; \
+      fi";
+    if let Ok(out) = Command::new("sh").args(["-c", script]).output() {
         if out.status.success() {
             for line in String::from_utf8_lossy(&out.stdout).lines().skip(2) {
                 if let Some(name) = line.split_whitespace().next() {
@@ -2708,6 +2834,28 @@ fn get_pip_installed() -> HashSet<String> {
         }
     }
     set
+}
+
+fn cli_installed(names: &[&str]) -> bool {
+    let home = get_real_home();
+    for name in names {
+        let candidates = [
+            format!("/usr/bin/{name}"),
+            format!("/usr/local/bin/{name}"),
+            format!("{home}/.local/bin/{name}"),
+            format!("{home}/.cargo/bin/{name}"),
+        ];
+        if candidates
+            .iter()
+            .any(|path| std::path::Path::new(path).is_file())
+        {
+            return true;
+        }
+        if sh_check(&format!("command -v {name} >/dev/null 2>&1")) {
+            return true;
+        }
+    }
+    false
 }
 
 fn sh_check(cmd: &str) -> bool {
@@ -2756,17 +2904,16 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
         "Cursor" => apt.contains("cursor"),
         "Claude  (desktop)" => apt.contains("claude-desktop"),
         "ChatGPT  (desktop)" => apt.contains("chatgpt"),
-        "ChatGPT  (CLI)" => sh_check(
-            "which codex || test -x \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/codex\"",
-        ),
-        "Claude Code  (CLI)" => sh_check(
-            "which claude || test -f \"$(eval echo ~${SUDO_USER:-$USER})/.local/bin/claude\"",
-        ),
+        "ChatGPT  (CLI)" => cli_installed(&["codex"]),
+        "Claude Code  (CLI)" => cli_installed(&["claude"]),
         "Obsidian" => apt.contains("obsidian"),
-        "jcodemunch-mcp" => sh_check("pip3 show jcodemunch-mcp 2>/dev/null | grep -q Name"),
-        "memory-mcp  (local)" => {
-            sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\"")
-        }
+        "jcodemunch-mcp" => sh_check(
+            "if [ \"$(id -u)\" -eq 0 ]; then \
+               sudo -u \"${SUDO_USER:-$USER}\" python3 -m pip show jcodemunch-mcp >/dev/null 2>&1; \
+             else \
+               python3 -m pip show jcodemunch-mcp >/dev/null 2>&1; \
+             fi",
+        ),
         // GNOME Shell Extensions
         "Ubuntu Dock  (gnome-ext)" => gnome_ext_installed("ubuntu-dock@ubuntu.com"),
         "Ubuntu AppIndicators  (gnome-ext)" => {
@@ -2817,10 +2964,9 @@ fn check_all_installed(packages: &mut Vec<Package>) {
             }
             InstallCmd::Script(_) => check_script_installed(pkg.name, &apt),
         };
-        if pkg.installed && !is_always_installed(pkg.name) {
+        if pkg.installed {
             pkg.selected = false;
-        }
-        if is_always_installed(pkg.name) {
+        } else if is_always_installed(pkg.name) {
             pkg.selected = true;
         }
     }
@@ -2848,7 +2994,7 @@ fn heal_apt() {
                 if [ -n \"$broken\" ]; then \
                   dpkg --remove --force-remove-reinstreq $broken >/dev/null 2>&1 || true; \
                 fi; \
-                apt-get install -f -y >/dev/null 2>&1 || true";
+                apt install -f -y >/dev/null 2>&1 || true";
     let _ = Command::new("sh").args(["-c", heal]).status();
 }
 
@@ -3129,7 +3275,10 @@ fn run_install(packages: Vec<Package>) {
         // An expired Spotify signing key makes apt update exit 100 for every
         // later package that refreshes the package lists.
         let _ = Command::new("sh").args(["-c",
-            "if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
+            "arch=$(dpkg --print-architecture); \
+             grep -Rls '$(ARCH)' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null \
+               | while IFS= read -r f; do sed -i \"s/\\$(ARCH)/${arch}/g\" \"$f\"; done; \
+             if grep -Rqs repository.spotify.com /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then \
                curl -fsSL https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc \
                | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/spotify.gpg \
                && echo 'deb [signed-by=/etc/apt/trusted.gpg.d/spotify.gpg] https://repository.spotify.com stable non-free' \
@@ -3178,9 +3327,19 @@ fn run_install(packages: Vec<Package>) {
                     .status()
             }
             InstallCmd::Pip(pkgs) => {
+                // Install into the invoking user's ~/.local. Root pip installs
+                // into /usr/local and tries to uninstall Debian modules that
+                // have no RECORD file (typing-extensions 4.10.0 on Ubuntu 24.04),
+                // which exits 1 for any package that needs a newer copy.
                 let script = format!(
-                    "python3 -m pip --version >/dev/null 2>&1 || apt-get install -y python3-pip; \
-                     python3 -m pip install --break-system-packages {}",
+                    "python3 -m pip --version >/dev/null 2>&1 || apt install -y python3-pip; \
+                     REAL_USER=\"${{SUDO_USER:-$USER}}\"; \
+                     if [ \"$(id -u)\" -eq 0 ]; then \
+                       sudo -u \"$REAL_USER\" python3 -m pip install --user --break-system-packages {}; \
+                     else \
+                       python3 -m pip install --user --break-system-packages {}; \
+                     fi",
+                    pkgs.join(" "),
                     pkgs.join(" ")
                 );
                 Command::new("sh").args(["-c", &script]).status()
@@ -3274,7 +3433,7 @@ fn dump_json() {
                     .replace('"', "\\\"")
                     .replace('\n', "\\n");
                 out.push_str(&format!(
-                    "{}  {{\"category\":\"{}\",\"name\":\"{}\",\"description\":\"{}\",\"cmd_type\":\"{}\",\"cmd_value\":{},\"requires_root\":{},\"default_selected\":{}}}",
+                    "{}  {{\"category\":\"{}\",\"name\":\"{}\",\"description\":\"{}\",\"cmd_type\":\"{}\",\"cmd_value\":{},\"requires_root\":{},\"default_selected\":{},\"ubuntu_versions\":{}}}",
                     sep,
                     current_cat.replace('"', "\\\""),
                     p.name.replace('"', "\\\""),
@@ -3283,6 +3442,14 @@ fn dump_json() {
                     cmd_value,
                     p.requires_root,
                     p.selected,
+                    match p.only_ubuntu {
+                        None => "null".to_string(),
+                        Some(versions) => {
+                            let quoted: Vec<String> =
+                                versions.iter().map(|version| format!("\"{version}\"")).collect();
+                            format!("[{}]", quoted.join(","))
+                        }
+                    },
                 ));
             }
         }
@@ -3369,13 +3536,12 @@ fn main() -> io::Result<()> {
 
     let selected: Vec<Package> = if do_install {
         let mut selected: Vec<Package> = app.selected_packages().into_iter().cloned().collect();
-        // Claude Code and the ChatGPT CLI are installed on every run, before anything else.
+        // Claude Code and the ChatGPT CLI run first when they are selected.
+        // Already-installed copies stay off the list unless the user checks them again.
         let mut front = Vec::new();
         for name in ["Claude Code  (CLI)", "ChatGPT  (CLI)"] {
             if let Some(i) = selected.iter().position(|p| p.name == name) {
                 front.push(selected.remove(i));
-            } else if let Some(p) = app.packages.iter().find(|p| p.name == name) {
-                front.push(p.clone());
             }
         }
         front.append(&mut selected);
@@ -3400,7 +3566,7 @@ fn main() -> io::Result<()> {
 mod tests {
     use super::{
         first_writable_dir, format_attempt_line, format_log_header, format_log_summary,
-        sanitize_log_field,
+        parse_version_id, release_allowed, release_lock_reason, sanitize_log_field, version_badge,
     };
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
@@ -3454,6 +3620,45 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(chosen, Some(open));
+    }
+
+    #[test]
+    fn release_gate_matches_the_running_ubuntu_version() {
+        assert!(release_allowed(Some("24.04"), None));
+        assert!(release_allowed(None, None));
+        assert!(release_allowed(Some("24.04"), Some(&["24.04"])));
+        assert!(!release_allowed(Some("24.04"), Some(&["22.04"])));
+        assert!(release_allowed(Some("26.04"), Some(&["24.04", "26.04"])));
+        assert!(!release_allowed(Some("22.04"), Some(&["24.04", "26.04"])));
+        assert!(!release_allowed(None, Some(&["22.04"])));
+    }
+
+    #[test]
+    fn version_badge_stays_nine_columns() {
+        assert_eq!(version_badge(&["22.04"]), " [22.04] ");
+        assert_eq!(version_badge(&["24.04", "26.04"]), " [24/26] ");
+        assert_eq!(version_badge(&["22.04"]).chars().count(), 9);
+        assert_eq!(version_badge(&["24.04", "26.04"]).chars().count(), 9);
+        assert_eq!(version_badge(&["not-a-version"]).chars().count(), 9);
+    }
+
+    #[test]
+    fn parse_version_id_reads_os_release() {
+        let text = "NAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION_CODENAME=noble\n";
+        assert_eq!(parse_version_id(text).as_deref(), Some("24.04"));
+        assert_eq!(parse_version_id("PRETTY_NAME=\"Ubuntu\"\n"), None);
+    }
+
+    #[test]
+    fn release_lock_reason_names_the_running_release() {
+        assert_eq!(
+            release_lock_reason(Some("24.04"), &["22.04"]),
+            "for 22.04 — locked on Ubuntu 24.04"
+        );
+        assert_eq!(
+            release_lock_reason(None, &["24.04", "26.04"]),
+            "for 24.04 or 26.04 — Ubuntu release unknown"
+        );
     }
 
     #[test]
