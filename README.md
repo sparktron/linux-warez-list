@@ -2,7 +2,7 @@
 
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/download/desktop)
 [![x86-64](https://img.shields.io/badge/arch-x86--64-555)](https://ubuntu.com/)
-[![installer v0.13.0](https://img.shields.io/badge/installer-v0.13.0-blue)](CHANGELOG.md)
+[![installer v0.13.1](https://img.shields.io/badge/installer-v0.13.1-blue)](CHANGELOG.md)
 [![107 packages](https://img.shields.io/badge/catalog-107%20packages-success)](#catalog)
 [![Rust TUI](https://img.shields.io/badge/TUI-ratatui-000?logo=rust&logoColor=white)](https://ratatui.rs/)
 
@@ -38,7 +38,7 @@ sudo bash install-all.sh
 
 Ubuntu **22.04 LTS**, x86-64. Run with `sudo` so root-only packages unlock. `install-all.sh` installs only the lowlatency kernel for the running Ubuntu release (`linux-lowlatency-hwe-22.04` or `linux-lowlatency-hwe-24.04`). The TUI lists both — pick the one that matches the machine. Do not install the unversioned `linux-lowlatency` package; on 24.04 it tracks the older 6.8 GA kernel.
 
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) and the [ChatGPT CLI](https://github.com/openai/codex) install first and stay selected. Space and “select none” do not turn them off.
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) and the [ChatGPT CLI](https://github.com/openai/codex) are checked only when they are not already installed. If they are already on the machine, they stay unchecked and the installer does not run them unless you check them yourself. When they are checked, they install first.
 
 Each run writes a result log of successful and failed attempts to `/var/log/linux-warez-list/install-YYYYMMDD-HHMMSS.log`. If that directory is not writable, the log goes to `~/.local/state/linux-warez-list/`. Lines are tab-separated: `status`, `name`, `detail`, where `status` is `ok`, `fail`, `error`, `skip`, or `warn`. The footer prints the counts and the log path.
 
@@ -103,7 +103,7 @@ Rows are colour-coded by install method:
 | [git](https://git-scm.com/) | Distributed version control | apt |
 | [gh](https://cli.github.com/) | GitHub CLI | script |
 | [Ubuntu 22.04 lowlatency kernel](https://packages.ubuntu.com/jammy/linux-lowlatency-hwe-22.04) | HWE lowlatency kernel for 22.04 | apt |
-| [Ubuntu 24.04 lowlatency kernel](https://packages.ubuntu.com/noble/linux-lowlatency-hwe-24.04) | HWE lowlatency kernel for 24.04 (7.0 series) | apt |
+| [Ubuntu 24.04 lowlatency kernel](https://packages.ubuntu.com/noble/linux-lowlatency-hwe-24.04) | Generic 7.0 HWE kernel plus `preempt=full` (no separate GRUB entry) | apt |
 | [GRUB Customizer](https://launchpad.net/grub-customizer) | Graphical GRUB menu editor | script |
 | [snapd](https://snapcraft.io/docs/installing-snapd) | Snap daemon, required before snap apps | script |
 | [curl](https://curl.se/) | URL transfer tool | apt |
@@ -372,4 +372,4 @@ Leave `SQLAlchemy==2.0.19` and `requests==2.31.0` pinned. Leave FFmpeg on the Ub
 
 ---
 
-**Last updated:** 2026-09-24 · [v0.13.0](CHANGELOG.md)
+**Last updated:** 2026-09-26 · [v0.13.1](CHANGELOG.md)

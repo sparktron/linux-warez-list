@@ -49,7 +49,7 @@
 ### Linux kernel (Ubuntu 22.04 or 24.04)
 - **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** `install-all.sh` reads `VERSION_ID` from `/etc/os-release` and installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04 (7.0 series). It does not install the other release's kernel. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. The TUI still lists both kernels as optional entries — select the one that matches the machine.
+- **Usage:** `install-all.sh` reads `VERSION_ID` from `/etc/os-release` and installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04. It does not install the other release's kernel. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. On 24.04 the HWE package does not install a separate kernel image. It keeps the generic 7.0 kernel and writes `preempt=full rcu_nocbs=all` to `/etc/default/grub.d/99-lowlatency.cfg`, so GRUB Customizer will not list a lowlatency entry. After reboot, check `cat /proc/cmdline`. The TUI still lists both kernels as optional entries — select the one that matches the machine.
 - **Install:** Automatic in `install-all.sh` for the running Ubuntu release, or the matching TUI entry
 - **Note:** Reboot required after installation
 - **Version Check:** `uname -r`
@@ -354,7 +354,7 @@
 - **What:** Cross-platform TUI system resource monitor
 - **Installed:** Yes (deb)
 - **Usage:** Monitor CPU per-core, memory, swap, disk I/O, network, and processes in one interactive terminal UI
-- **Install:** Download the musl (statically-linked) `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom-musl_*_amd64.deb`) and `sudo apt-get install -y ./bottom-musl_*_amd64.deb`. The musl build has no `libc6` dependency, so it installs on Ubuntu 22.04 (glibc 2.35); the default gnu build pins `libc6 (>= 2.39)` and will break apt on jammy.
+- **Install:** Download the musl (statically-linked) `.deb` from https://github.com/ClementTsang/bottom/releases/latest (`bottom-musl_*_amd64.deb`) and `sudo apt install -y ./bottom-musl_*_amd64.deb`. The musl build has no `libc6` dependency, so it installs on Ubuntu 22.04 (glibc 2.35); the default gnu build pins `libc6 (>= 2.39)` and will break apt on jammy.
 - **Version Check:** `btm --version`
 - **Usage:** Launch with `btm`; press `?` for help
 
@@ -560,7 +560,7 @@
 - **What:** Team messaging and collaboration platform
 - **Installed:** Yes
 - **Usage:** Workplace communication, notifications
-- **Install:** `snap install slack`, then `sudo apt-get remove -y slack-desktop` if the old vendor .deb is still installed
+- **Install:** `snap install slack`, then `sudo apt remove -y slack-desktop` if the old vendor .deb is still installed
 - **Usage:** Desktop application
 
 ### Spotify

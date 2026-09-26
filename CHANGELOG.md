@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.1] — 2026-09-26
+
+### Fixes
+
+#### apt update no longer dies on a literal `$(ARCH)`, and Claude Code installs under sudo
+
+**Motivation:** A 0.13.0 TUI run recorded `apt update` exit 100, then FiraCode and every GNOME extension failed with the same code because their scripts start with `apt-get`. Claude Code exited 243. The NVIDIA container toolkit source on this machine still contains `$(ARCH)`, which apt does not expand, so that URI 404s. npm run via sudo drops to nobody and cannot write the global prefix; that EACCES is exit 243.
+
+**What it does:** Before `apt update`, both installers replace a literal `$(ARCH)` in apt sources with the machine architecture. Claude Code's npm install uses `--unsafe-perm`. The Nerd Font and GNOME extension scripts skip `apt` when unzip or pip is already available, and the font is installed into the invoking user's home. If Claude Code or the ChatGPT CLI is already installed, it stays unchecked and is not installed again unless you check it. The Ubuntu 24.04 lowlatency package is documented as boot settings on the generic 7.0 kernel (`preempt=full rcu_nocbs=all`), not as a separate kernel image in GRUB Customizer.
+
+---
+
 ## [0.13.0] — 2026-09-24
 
 ### Packages

@@ -192,7 +192,7 @@ remove_deb_if_installed() {
 
   if dpkg -s "${pkg_name}" &> /dev/null; then
     log "Removing leftover ${pkg_name} .deb..."
-    apt-get remove -y "${pkg_name}" || warn "Could not remove ${pkg_name}"
+    apt remove -y "${pkg_name}" || warn "Could not remove ${pkg_name}"
   fi
 }
 
@@ -232,7 +232,7 @@ heal_apt() {
     warn "Repairing broken package state: ${broken}"
     dpkg --remove --force-remove-reinstreq ${broken} >/dev/null 2>&1 || true
   fi
-  apt-get install -f -y >/dev/null 2>&1 || true
+  apt install -f -y >/dev/null 2>&1 || true
 }
 
 # Install the low-latency HWE kernel that matches this machine's Ubuntu release.
@@ -275,8 +275,14 @@ install_matching_lowlatency_kernel() {
 
   log "Installing low-latency kernel ${pkg} for Ubuntu ${version_id} (running: $(uname -r))..."
   apt install -y "${pkg}"
-  warn "Reboot required before the Ubuntu ${version_id} low-latency kernel becomes the running kernel"
-  warn "After reboot, verify with: uname -r"
+  if [[ "${version_id}" == "24.04" ]]; then
+    warn "Ubuntu 24.04 keeps the generic HWE kernel and adds preempt=full rcu_nocbs=all"
+    warn "GRUB Customizer will not show a separate lowlatency kernel"
+    warn "Reboot, then verify with: cat /proc/cmdline"
+  else
+    warn "Reboot required before the Ubuntu ${version_id} low-latency kernel becomes the running kernel"
+    warn "After reboot, verify with: uname -r"
+  fi
 }
 
 # Repair any pre-existing broken package state (e.g. left behind by an earlier
@@ -299,9 +305,22 @@ repair_spotify_apt() {
     > /etc/apt/sources.list.d/spotify.list
 }
 
+# The NVIDIA container toolkit repo line is often saved with a literal $(ARCH).
+# Apt does not expand that, the URI 404s, and `apt update` exits 100. Every
+# later apt in the run then fails the same way.
+repair_literal_arch_apt_sources() {
+  local arch f
+  arch="$(dpkg --print-architecture)"
+  while IFS= read -r f; do
+    [ -n "${f}" ] || continue
+    sed -i "s/\$(ARCH)/${arch}/g" "${f}"
+  done < <(grep -Rls '$(ARCH)' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true)
+}
+
 # Update package list
 log "Updating package list..."
 repair_spotify_apt
+repair_literal_arch_apt_sources
 apt update
 
 # ===== SYSTEM PACKAGES =====
@@ -352,9 +371,9 @@ log "Installing Python 3.10 and dev tools..."
 # Ubuntu 24.04 dropped Python 3.10 from the archive. deadsnakes still publishes it.
 if ! apt-cache show python3.10 >/dev/null 2>&1; then
   add-apt-repository -y ppa:deadsnakes/ppa
-  apt-get update
+  apt update
 fi
-apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip python3-venv
+apt install -y python3.10 python3.10-venv python3.10-dev python3-pip python3-venv
 
 log "Installing GCC and development headers..."
 apt install -y gcc g++ gdb
@@ -370,9 +389,9 @@ log "Installing Clang 14 and LLVM..."
 # 24.04: the clang metapackage is Clang 18 and clang-format-12 is gone, so install
 # clang-14 from Ubuntu and the 22.04 clang-format-12 packages directly.
 if apt-cache show clang-format-12 >/dev/null 2>&1; then
-  apt-get install -y clang clang-format-12 llvm llvm-dev
+  apt install -y clang clang-format-12 llvm llvm-dev
 else
-  apt-get install -y clang-14 llvm-14 llvm-14-dev
+  apt install -y clang-14 llvm-14 llvm-14-dev
   arch="$(dpkg --print-architecture)"
   tmp="$(mktemp -d)"
   base="http://archive.ubuntu.com/ubuntu/pool/universe/l/llvm-toolchain-12"
@@ -383,7 +402,7 @@ else
   do
     curl -fsSL -o "${tmp}/${deb}" "${base}/${deb}"
   done
-  apt-get install -y "${tmp}"/*.deb
+  apt install -y "${tmp}"/*.deb
   rm -rf "${tmp}"
   update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 140
   update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 140
@@ -402,14 +421,24 @@ fi
 log "Upgrading npm to latest stable..."
 npm install -g npm@latest 2>/dev/null || warn "npm upgrade failed"
 
-# Always install the two CLIs before the rest of the environment. Claude Code
-# needs npm, which is in place above. Codex does not.
-log "Installing Claude Code CLI..."
-npm install -g @anthropic-ai/claude-code || warn "Claude Code install failed"
+# Install the two CLIs before the rest of the environment only when they are
+# missing. Claude Code needs npm, which is in place above. Codex does not.
+if command -v claude >/dev/null 2>&1 || [[ -x /usr/bin/claude || -x "${REAL_HOME}/.local/bin/claude" ]]; then
+  log "Claude Code CLI already installed"
+else
+  log "Installing Claude Code CLI..."
+  # --unsafe-perm: sudo makes npm drop to nobody, which cannot write the global
+  # prefix, and npm then exits 243 (EACCES).
+  npm install -g --unsafe-perm @anthropic-ai/claude-code || warn "Claude Code install failed"
+fi
 
-log "Installing ChatGPT CLI (Codex)..."
-sudo -u "${REAL_USER}" bash -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' \
-  || warn "ChatGPT CLI install failed"
+if command -v codex >/dev/null 2>&1 || [[ -x "${REAL_HOME}/.local/bin/codex" ]]; then
+  log "ChatGPT CLI already installed"
+else
+  log "Installing ChatGPT CLI (Codex)..."
+  sudo -u "${REAL_USER}" bash -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' \
+    || warn "ChatGPT CLI install failed"
+fi
 
 # ===== BUN =====
 if ! sudo -u "${REAL_USER}" bash -c 'command -v bun' &> /dev/null; then
@@ -583,10 +612,10 @@ BTM_DEB_URL=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/
   | cut -d'"' -f4)
 if [[ -n "${BTM_DEB_URL}" ]]; then
   curl -Lo /tmp/bottom.deb "${BTM_DEB_URL}"
-  # apt-get install of a local .deb resolves deps atomically: if it cannot, it
+  # apt install of a local .deb resolves deps atomically: if it cannot, it
   # aborts cleanly instead of leaving a half-unpacked package (unlike `dpkg -i`).
   # On failure, remove any partial install so apt is never left broken.
-  if ! apt-get install -y /tmp/bottom.deb; then
+  if ! apt install -y /tmp/bottom.deb; then
     warn "Failed to install bottom .deb; removing partial install to keep apt healthy"
     dpkg --remove bottom 2>/dev/null || true
   fi
@@ -820,8 +849,8 @@ apt install -y simplescreenrecorder
 
 log "Installing VeraCrypt..."
 add-apt-repository -y ppa:unit193/encryption \
-  && apt-get update \
-  && apt-get install -y veracrypt \
+  && apt update \
+  && apt install -y veracrypt \
   || warn "VeraCrypt install failed"
 
 log "Installing GNOME Tweaks..."
@@ -880,7 +909,7 @@ if ! dpkg -l cursor &>/dev/null; then
   esac
   if [ -n "${CURSOR_URL}" ]; then
     if curl -fL -o /tmp/cursor.deb "${CURSOR_URL}"; then
-      apt-get install -y /tmp/cursor.deb || warn "Cursor install failed"
+      apt install -y /tmp/cursor.deb || warn "Cursor install failed"
       rm -f /tmp/cursor.deb
     else
       warn "Could not download Cursor"
@@ -914,7 +943,7 @@ if ! dpkg -l chatgpt &>/dev/null; then
   if [ -n "${CHATGPT_DEB}" ]; then
     if curl -fL -o /tmp/chatgpt.deb \
       "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/${CHATGPT_DEB}"; then
-      apt-get install -y /tmp/chatgpt.deb || warn "ChatGPT desktop install failed"
+      apt install -y /tmp/chatgpt.deb || warn "ChatGPT desktop install failed"
       rm -f /tmp/chatgpt.deb
     else
       warn "Could not download ChatGPT desktop"
@@ -929,13 +958,13 @@ log "Installing NoMachine..."
 if ! dpkg -l nomachine &>/dev/null; then
   # NoMachine moved its download flow to downloads.nomachine.com; the old
   # www.nomachine.com/download/linux&id=1 page no longer embeds the .deb URL.
-  # Scrape the current page for the amd64 .deb (x86-64 target). apt-get installs
+  # Scrape the current page for the amd64 .deb (x86-64 target). apt installs
   # the local .deb atomically so a failure never poisons apt.
   NM_URL=$(curl -fsSL 'https://download.nomachine.com/download/?id=43&platform=linux' 2>/dev/null \
     | grep -oP 'https://[^" ]+/nomachine[^" ]*_amd64\.deb' | head -1) || true
   if [ -n "${NM_URL:-}" ]; then
     curl -fsSL "$NM_URL" -o /tmp/nomachine.deb
-    apt-get install -y /tmp/nomachine.deb || warn "NoMachine install failed"
+    apt install -y /tmp/nomachine.deb || warn "NoMachine install failed"
     rm -f /tmp/nomachine.deb
   else
     warn "Could not determine NoMachine download URL -- visit https://www.nomachine.com/download"
