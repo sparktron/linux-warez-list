@@ -48,6 +48,30 @@ def load_packages():
 PKGS = load_packages()
 TOTAL = len(PKGS)
 
+def host_ubuntu_version():
+    try:
+        with open("/etc/os-release") as rel:
+            for line in rel:
+                if line.startswith("VERSION_ID="):
+                    version = line.split("=", 1)[1].strip().strip('"')
+                    return version or None
+    except OSError:
+        return None
+    return None
+
+HOST_UBUNTU = host_ubuntu_version()
+
+def version_locked(pkg):
+    only = pkg.get("ubuntu_versions")
+    return bool(only) and HOST_UBUNTU not in only
+
+def version_badge(only):
+    if len(only) == 1 and len(only[0]) == 5:
+        return f" [{only[0]}] "
+    if len(only) == 2 and all(len(version) == 5 for version in only):
+        return f" [{only[0][:2]}/{only[1][:2]}] "
+    return " [os]    "
+
 # ── CSS color class per cmd_type ───────────────────────────────────────────────
 DOT_CLS = {"apt": "c", "sh": "lg", "cargo": "lm", "pip": "lb", "snap": "lyl"}
 
@@ -178,7 +202,7 @@ def build_select():
     )
 
     # Count default-selected
-    n_selected = sum(1 for p in PKGS if p["default_selected"])
+    n_selected = sum(1 for p in PKGS if p["default_selected"] and not version_locked(p))
     selected_lbl = f"{n_selected}/{TOTAL} selected  "
 
     # Title bar
@@ -200,6 +224,16 @@ def build_select():
         ("Q","lr"), (" quit","dim"),
         (" "*24,""), ("│","c"),
     ))
+    release = HOST_UBUNTU or "unknown"
+    locked_n = sum(1 for pkg in PKGS if version_locked(pkg))
+    if locked_n == 0:
+        banner = f"  Ubuntu {release}"
+    elif locked_n == 1:
+        banner = f"  Ubuntu {release} — 1 package for another release is locked"
+    else:
+        banner = f"  Ubuntu {release} — {locked_n} packages for another release are locked"
+    banner = banner[: W - 2]
+    lines.append(row(("│","c"), (banner,"dim"), (" "*(W-2-len(banner)),""), ("│","c")))
     lines.append(row(("╰"+hbar(W-2)+"╯","c")))
 
     # Panel top borders
@@ -227,20 +261,25 @@ def build_select():
             ri += 1
 
         is_cursor = pkg["name"] == CURSOR_NAME
-        selected  = pkg["default_selected"]
+        selected  = pkg["default_selected"] and not version_locked(pkg)
         requires_root = pkg["requires_root"]
+        locked_ver = version_locked(pkg)
         dcls = DOT_CLS[pkg["cmd_type"]]
 
         arrow     = "▶ " if is_cursor else "  "
-        arrow_cls = "cb" if is_cursor else "dim"
-        dot_col   = "wh" if is_cursor else dcls
-        check     = "x" if selected else " "
-        check_col = ("gb" if is_cursor else "g") if selected else "dg"
+        arrow_cls = "dim" if locked_ver else ("cb" if is_cursor else "dim")
+        dot_col   = "dim" if locked_ver else ("wh" if is_cursor else dcls)
+        check     = "-" if locked_ver else ("x" if selected else " ")
+        check_col = "dim" if locked_ver else (("gb" if is_cursor else "g") if selected else "dg")
         brk_col   = "dim"
-        name_col  = "wb" if (is_cursor or selected) else "wh"
+        name_col  = "dim" if locked_ver else ("wb" if (is_cursor or selected) else "wh")
         name_d    = pad(pkg["name"], NAME_W)
-        suffix    = " [root]  " if requires_root else "         "
-        suf_col   = ("lrb" if is_cursor else "lr") if requires_root else ""
+        if locked_ver:
+            suffix = version_badge(pkg["ubuntu_versions"])
+            suf_col = "dim"
+        else:
+            suffix = " [root]  " if requires_root else "         "
+            suf_col = ("lrb" if is_cursor else "lr") if requires_root else ""
         l_spans   = [
             ("│","c"), (arrow,arrow_cls), ("●",dot_col), (" ",""),
             ("[",brk_col), (check,check_col), ("] ",brk_col),

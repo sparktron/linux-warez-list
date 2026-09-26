@@ -40,6 +40,9 @@ struct Package {
     selected: bool,
     requires_root: bool,
     requires_pkg: Option<&'static str>,
+    /// Ubuntu `VERSION_ID` values this package may be installed on.
+    /// `None` means every release.
+    only_ubuntu: Option<&'static [&'static str]>,
     installed: bool,
 }
 
@@ -64,12 +67,19 @@ struct App {
     screen: Screen,
     confirm_scroll: u16,
     is_root: bool,
+    ubuntu_version: Option<String>,
 }
 
 impl App {
     fn new() -> Self {
         let (mut packages, entries) = build_data();
         check_all_installed(&mut packages);
+        let ubuntu_version = ubuntu_version_id();
+        for pkg in &mut packages {
+            if !release_allowed(ubuntu_version.as_deref(), pkg.only_ubuntu) {
+                pkg.selected = false;
+            }
+        }
         let cursor = entries
             .iter()
             .position(|e| matches!(e, Entry::Pkg(_)))
@@ -84,7 +94,12 @@ impl App {
             screen: Screen::Select,
             confirm_scroll: 0,
             is_root: is_root(),
+            ubuntu_version,
         }
+    }
+
+    fn version_locked(&self, pkg: &Package) -> bool {
+        !release_allowed(self.ubuntu_version.as_deref(), pkg.only_ubuntu)
     }
 
     fn current_pkg_idx(&self) -> Option<usize> {
@@ -106,7 +121,8 @@ impl App {
             let dep_locked = self.packages[i]
                 .requires_pkg
                 .map_or(false, |dep| !self.dep_satisfied(dep));
-            if !root_locked && !dep_locked && !self.packages[i].installed {
+            let version_locked = self.version_locked(&self.packages[i]);
+            if !root_locked && !dep_locked && !version_locked && !self.packages[i].installed {
                 if is_always_installed(self.packages[i].name)
                     && self.packages[i].selected
                     && !self.packages[i].installed
@@ -133,6 +149,9 @@ impl App {
         // extension, Extension Manager will already be selected — dep check passes naturally.
         for i in 0..self.packages.len() {
             if self.packages[i].installed {
+                continue;
+            }
+            if self.version_locked(&self.packages[i]) {
                 continue;
             }
             if !self.is_root && self.packages[i].requires_root {
@@ -250,6 +269,7 @@ impl DataBuilder {
             selected,
             requires_root,
             requires_pkg: None,
+            only_ubuntu: None,
             installed: false,
         });
         self.entries.push(Entry::Pkg(idx));
@@ -259,6 +279,14 @@ impl DataBuilder {
     fn dep(&mut self, pkg_name: &'static str) -> &mut Self {
         if let Some(p) = self.packages.last_mut() {
             p.requires_pkg = Some(pkg_name);
+        }
+        self
+    }
+
+    /// Restrict the package just added to these Ubuntu `VERSION_ID` values.
+    fn only_ubuntu(&mut self, versions: &'static [&'static str]) -> &mut Self {
+        if let Some(p) = self.packages.last_mut() {
+            p.only_ubuntu = Some(versions);
         }
         self
     }
@@ -329,6 +357,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         true,
     );
+    b.only_ubuntu(&["22.04"]);
 
     b.pkg(
         "Ubuntu 24.04 lowlatency kernel",
@@ -342,6 +371,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         true,
     );
+    b.only_ubuntu(&["24.04"]);
 
     b.pkg(
         "GRUB Customizer",
@@ -1854,6 +1884,7 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         false,
         true,
     );
+    b.only_ubuntu(&["24.04", "26.04"]);
 
     b.pkg(
         "jcodemunch-mcp",
@@ -1875,25 +1906,6 @@ fn build_data() -> (Vec<Package>, Vec<Entry>) {
         ),
         false,
         true,
-    );
-
-    b.pkg(
-        "memory-mcp  (local)",
-        "Local persistent memory MCP server for Claude Desktop. Gives Claude a read/write \
-         key-value store that persists across sessions — store facts, preferences, and \
-         context without relying on cloud memory. Runs as a Python script via the MCP \
-         library. After install, add to mcpServers in ~/.config/Claude/claude_desktop_config.json \
-         with command '/usr/bin/python3' pointing to ~/repos/memory-mcp/memory_mcp.py.",
-        InstallCmd::Script(
-            "python3 -m pip install --break-system-packages mcp \
-             && REAL_HOME=$(eval echo ~\"${SUDO_USER:-$USER}\") \
-             && mkdir -p \"$REAL_HOME/repos/memory-mcp\" \
-             && curl -fsSL https://raw.githubusercontent.com/dylansparks/memory-mcp/main/memory_mcp.py \
-             -o \"$REAL_HOME/repos/memory-mcp/memory_mcp.py\" 2>/dev/null \
-             || echo 'memory_mcp.py must be placed manually at ~/repos/memory-mcp/memory_mcp.py'",
-        ),
-        false,
-        false,
     );
 
     b.build()
@@ -1968,8 +1980,9 @@ fn render(f: &mut Frame, app: &mut App) {
 
 fn render_select(f: &mut Frame, app: &mut App) {
     let area = f.area();
-    // Title bar is 4 rows normally; grows to 5 when not root to fit the warning line.
-    let title_h = if app.is_root { 4 } else { 5 };
+    // Borders plus two content lines, the Ubuntu release line, and the sudo
+    // warning when the installer is not root.
+    let title_h = if app.is_root { 5 } else { 6 };
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -2066,8 +2079,26 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         );
 
+    let release = app.ubuntu_version.as_deref().unwrap_or("unknown");
+    let locked_for_release = app
+        .packages
+        .iter()
+        .filter(|pkg| app.version_locked(pkg) && !pkg.installed)
+        .count();
+    let banner_text = if locked_for_release == 0 {
+        format!("  Ubuntu {release}")
+    } else if locked_for_release == 1 {
+        format!("  Ubuntu {release} — 1 package for another release is locked")
+    } else {
+        format!("  Ubuntu {release} — {locked_for_release} packages for another release are locked")
+    };
+    let banner = Line::from(Span::styled(banner_text, Style::default().fg(C_DIM)));
+
     if app.is_root {
-        f.render_widget(Paragraph::new(vec![line1, line2]).block(block), area);
+        f.render_widget(
+            Paragraph::new(vec![line1, line2, banner]).block(block),
+            area,
+        );
     } else {
         let locked_count = app.packages.iter().filter(|p| p.requires_root).count();
         let line3 = Line::from(vec![
@@ -2086,7 +2117,10 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
         ]);
-        f.render_widget(Paragraph::new(vec![line1, line2, line3]).block(block), area);
+        f.render_widget(
+            Paragraph::new(vec![line1, line2, banner, line3]).block(block),
+            area,
+        );
     }
 }
 
@@ -2138,7 +2172,8 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                         .iter()
                         .any(|p| p.name == dep && (p.installed || p.selected))
                 });
-                let locked = (!app.is_root && pkg.requires_root) || dep_locked;
+                let version_locked = app.version_locked(pkg);
+                let locked = (!app.is_root && pkg.requires_root) || dep_locked || version_locked;
                 let installed = pkg.installed;
                 let (dot, _badge, dot_col) = type_meta(&pkg.cmd);
 
@@ -2217,10 +2252,19 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     Style::default().fg(Color::White)
                 };
 
-                // Badge " [done]  " / " [sudo]  " / " [root]  " / spaces (9 chars each)
+                // Badge " [done]  " / " [22.04] " / " [sudo]  " / " [root]  " (9 chars each)
                 let (root_txt, root_sty) = if installed {
                     (
-                        " [done]  ",
+                        " [done]  ".to_string(),
+                        Style::default().fg(C_DIM).bg(if is_cursor {
+                            C_CURSOR
+                        } else {
+                            Color::Reset
+                        }),
+                    )
+                } else if version_locked {
+                    (
+                        version_badge(pkg.only_ubuntu.unwrap_or(&[])),
                         Style::default().fg(C_DIM).bg(if is_cursor {
                             C_CURSOR
                         } else {
@@ -2229,7 +2273,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else if locked {
                     (
-                        " [sudo]  ",
+                        " [sudo]  ".to_string(),
                         Style::default().fg(C_DIM).bg(if is_cursor {
                             C_CURSOR
                         } else {
@@ -2238,7 +2282,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else if pkg.requires_root {
                     (
-                        " [root]  ",
+                        " [root]  ".to_string(),
                         if is_cursor {
                             Style::default().fg(C_ROOT).bg(C_CURSOR)
                         } else {
@@ -2247,7 +2291,7 @@ fn render_package_list(f: &mut Frame, app: &mut App, area: Rect) {
                     )
                 } else {
                     (
-                        "         ",
+                        "         ".to_string(),
                         Style::default().bg(if is_cursor { C_CURSOR } else { Color::Reset }),
                     )
                 };
@@ -2353,6 +2397,26 @@ fn render_description(f: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(root_col).add_modifier(Modifier::BOLD),
                 ),
             ]));
+
+            if let Some(only) = pkg.only_ubuntu {
+                let (release_text, release_col) = if app.version_locked(pkg) {
+                    (
+                        release_lock_reason(app.ubuntu_version.as_deref(), only),
+                        C_WARN,
+                    )
+                } else {
+                    ("this Ubuntu release".to_string(), C_OK)
+                };
+                ls.push(Line::from(vec![
+                    Span::styled("  Ubuntu ", Style::default().fg(C_DIM)),
+                    Span::styled(
+                        release_text,
+                        Style::default()
+                            .fg(release_col)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+            }
 
             // Installed status row
             if pkg.installed {
@@ -2648,6 +2712,54 @@ fn render_confirm(f: &mut Frame, app: &App) {
 
 // ─── Installation ─────────────────────────────────────────────────────────────
 
+fn parse_version_id(text: &str) -> Option<String> {
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("VERSION_ID=") {
+            let id = rest.trim().trim_matches('"');
+            if !id.is_empty() {
+                return Some(id.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn ubuntu_version_id() -> Option<String> {
+    fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|text| parse_version_id(&text))
+}
+
+/// `only` lists the Ubuntu releases a package may be installed on.
+/// `None` means every release. An unknown running release locks a restricted package.
+fn release_allowed(running: Option<&str>, only: Option<&[&str]>) -> bool {
+    match only {
+        None => true,
+        Some(allowed) => {
+            running.is_some_and(|version| allowed.iter().any(|release| *release == version))
+        }
+    }
+}
+
+/// Nine-column list badge naming the releases a locked package is for.
+fn version_badge(only: &[&str]) -> String {
+    if only.len() == 1 && only[0].len() == 5 {
+        format!(" [{}] ", only[0])
+    } else if only.len() == 2 && only.iter().all(|version| version.len() == 5) {
+        format!(" [{}/{}] ", &only[0][..2], &only[1][..2])
+    } else {
+        " [os]    ".to_string()
+    }
+}
+
+fn release_lock_reason(running: Option<&str>, only: &[&str]) -> String {
+    let need = only.join(" or ");
+    match running {
+        Some(version) => format!("for {need} — locked on Ubuntu {version}"),
+        None => format!("for {need} — Ubuntu release unknown"),
+    }
+}
+
 fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
@@ -2802,9 +2914,6 @@ fn check_script_installed(name: &str, apt: &HashSet<String>) -> bool {
                python3 -m pip show jcodemunch-mcp >/dev/null 2>&1; \
              fi",
         ),
-        "memory-mcp  (local)" => {
-            sh_check("test -f \"$(eval echo ~${SUDO_USER:-$USER})/repos/memory-mcp/memory_mcp.py\"")
-        }
         // GNOME Shell Extensions
         "Ubuntu Dock  (gnome-ext)" => gnome_ext_installed("ubuntu-dock@ubuntu.com"),
         "Ubuntu AppIndicators  (gnome-ext)" => {
@@ -3324,7 +3433,7 @@ fn dump_json() {
                     .replace('"', "\\\"")
                     .replace('\n', "\\n");
                 out.push_str(&format!(
-                    "{}  {{\"category\":\"{}\",\"name\":\"{}\",\"description\":\"{}\",\"cmd_type\":\"{}\",\"cmd_value\":{},\"requires_root\":{},\"default_selected\":{}}}",
+                    "{}  {{\"category\":\"{}\",\"name\":\"{}\",\"description\":\"{}\",\"cmd_type\":\"{}\",\"cmd_value\":{},\"requires_root\":{},\"default_selected\":{},\"ubuntu_versions\":{}}}",
                     sep,
                     current_cat.replace('"', "\\\""),
                     p.name.replace('"', "\\\""),
@@ -3333,6 +3442,14 @@ fn dump_json() {
                     cmd_value,
                     p.requires_root,
                     p.selected,
+                    match p.only_ubuntu {
+                        None => "null".to_string(),
+                        Some(versions) => {
+                            let quoted: Vec<String> =
+                                versions.iter().map(|version| format!("\"{version}\"")).collect();
+                            format!("[{}]", quoted.join(","))
+                        }
+                    },
                 ));
             }
         }
@@ -3449,7 +3566,7 @@ fn main() -> io::Result<()> {
 mod tests {
     use super::{
         first_writable_dir, format_attempt_line, format_log_header, format_log_summary,
-        sanitize_log_field,
+        parse_version_id, release_allowed, release_lock_reason, sanitize_log_field, version_badge,
     };
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
@@ -3503,6 +3620,45 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(chosen, Some(open));
+    }
+
+    #[test]
+    fn release_gate_matches_the_running_ubuntu_version() {
+        assert!(release_allowed(Some("24.04"), None));
+        assert!(release_allowed(None, None));
+        assert!(release_allowed(Some("24.04"), Some(&["24.04"])));
+        assert!(!release_allowed(Some("24.04"), Some(&["22.04"])));
+        assert!(release_allowed(Some("26.04"), Some(&["24.04", "26.04"])));
+        assert!(!release_allowed(Some("22.04"), Some(&["24.04", "26.04"])));
+        assert!(!release_allowed(None, Some(&["22.04"])));
+    }
+
+    #[test]
+    fn version_badge_stays_nine_columns() {
+        assert_eq!(version_badge(&["22.04"]), " [22.04] ");
+        assert_eq!(version_badge(&["24.04", "26.04"]), " [24/26] ");
+        assert_eq!(version_badge(&["22.04"]).chars().count(), 9);
+        assert_eq!(version_badge(&["24.04", "26.04"]).chars().count(), 9);
+        assert_eq!(version_badge(&["not-a-version"]).chars().count(), 9);
+    }
+
+    #[test]
+    fn parse_version_id_reads_os_release() {
+        let text = "NAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION_CODENAME=noble\n";
+        assert_eq!(parse_version_id(text).as_deref(), Some("24.04"));
+        assert_eq!(parse_version_id("PRETTY_NAME=\"Ubuntu\"\n"), None);
+    }
+
+    #[test]
+    fn release_lock_reason_names_the_running_release() {
+        assert_eq!(
+            release_lock_reason(Some("24.04"), &["22.04"]),
+            "for 22.04 — locked on Ubuntu 24.04"
+        );
+        assert_eq!(
+            release_lock_reason(None, &["24.04", "26.04"]),
+            "for 24.04 or 26.04 — Ubuntu release unknown"
+        );
     }
 
     #[test]

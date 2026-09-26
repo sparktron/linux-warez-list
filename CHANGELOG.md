@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.14.1] — 2026-09-26
+
+### Packages
+
+#### memory-mcp is no longer an installer entry
+
+**Motivation:** The GitHub file the entry downloaded returns 404, and installing `mcp` as root failed while trying to replace Debian `typing-extensions`. The script still reported success.
+
+**What it does:** `memory-mcp (local)` is removed from the TUI, the README catalog, and `LINUX_WAREZ_LIST.md`. The catalog is 106 packages.
+
+---
+
+## [0.14.0] — 2026-09-26
+
+### Selection
+
+#### Packages for another Ubuntu release stay locked
+
+**Motivation:** The TUI listed both lowlatency kernels and left the choice to the operator. Selecting `linux-lowlatency-hwe-22.04` on Ubuntu 24.04 (or the reverse) installs the wrong kernel. ChatGPT desktop's preview only supports 24.04 and 26.04.
+
+**What it does:** On startup the TUI reads `VERSION_ID` from `/etc/os-release`. A package tagged for other releases is dimmed, cannot be toggled, and is skipped by select-all. The row badge shows the release it is for (`[22.04]`, `[24/26]`). The title bar names the running release. `--dump-json` adds `ubuntu_versions` (`null` when the package is for every release). The headless script already installed only the matching kernel.
+
+---
+
 ## [0.13.2] — 2026-09-26
 
 ### Fixes

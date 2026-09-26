@@ -49,7 +49,7 @@
 ### Linux kernel (Ubuntu 22.04 or 24.04)
 - **What:** Low-latency hardware-enablement kernel for one Ubuntu LTS release
 - **Installed:** Optional
-- **Usage:** `install-all.sh` reads `VERSION_ID` from `/etc/os-release` and installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04. It does not install the other release's kernel. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. On 24.04 the HWE package does not install a separate kernel image. It keeps the generic 7.0 kernel and writes `preempt=full rcu_nocbs=all` to `/etc/default/grub.d/99-lowlatency.cfg`, so GRUB Customizer will not list a lowlatency entry. After reboot, check `cat /proc/cmdline`. The TUI still lists both kernels as optional entries — select the one that matches the machine.
+- **Usage:** Both installers read `VERSION_ID` from `/etc/os-release`. `install-all.sh` installs only the matching package: `linux-lowlatency-hwe-22.04` on 22.04, or `linux-lowlatency-hwe-24.04` on 24.04. It does not install the other release's kernel. The TUI lists both kernels and locks the one that does not match the running release. The unversioned `linux-lowlatency` package is not used; on 24.04 it tracks the older 6.8 GA kernel. On 24.04 the HWE package does not install a separate kernel image. It keeps the generic 7.0 kernel and writes `preempt=full rcu_nocbs=all` to `/etc/default/grub.d/99-lowlatency.cfg`, so GRUB Customizer will not list a lowlatency entry. After reboot, check `cat /proc/cmdline`.
 - **Install:** Automatic in `install-all.sh` for the running Ubuntu release, or the matching TUI entry
 - **Note:** Reboot required after installation
 - **Version Check:** `uname -r`
@@ -949,7 +949,7 @@
 ### ChatGPT Desktop
 - **What:** OpenAI ChatGPT desktop app for Linux (preview)
 - **Installed:** Optional
-- **Usage:** Native ChatGPT workspace with local projects and Codex. Preview supports Ubuntu 24.04 and 26.04, x64 and ARM64. The .deb adds OpenAI's apt repository for later upgrades.
+- **Usage:** Native ChatGPT workspace with local projects and Codex. Preview supports Ubuntu 24.04 and 26.04, x64 and ARM64. The TUI locks this entry on any other release. The .deb adds OpenAI's apt repository for later upgrades.
 - **Install:** `curl -fL -o /tmp/chatgpt.deb https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb && sudo apt install -y /tmp/chatgpt.deb`
 - **Version Check:** `chatgpt` (or ChatGPT → About)
 
@@ -997,21 +997,6 @@
     "args": ["--from", "git+https://github.com/jgravelle/jcodemunch-mcp.git", "jcodemunch-mcp"]
   }
   ```
-
-### memory (local MCP)
-- **What:** Local persistent memory MCP server — gives Claude Desktop a read/write key-value store that persists across sessions
-- **Installed:** Yes (custom Python script at `~/repos/memory-mcp/memory_mcp.py`)
-- **Usage:** Claude Desktop can store and recall facts, preferences, and context across conversations without relying on cloud memory
-- **Config:** `~/.config/Claude/claude_desktop_config.json` → `mcpServers.memory`
-- **Install:** Clone/copy `memory_mcp.py`, install `mcp` Python package (`pip install mcp`), then add to Claude Desktop config:
-  ```json
-  "memory": {
-    "command": "/usr/bin/python3",
-    "args": ["/home/mythos/repos/memory-mcp/memory_mcp.py"]
-  }
-  ```
-
----
 
 ### Cloud MCP Integrations (configured via claude.ai — no local install)
 
